@@ -416,7 +416,7 @@ app.get('/uploads/:filename', requireAdmin, (req, res) => {
   }
 });
 
-app.use(express.static(path.join(__dirname, '../frontend'), { maxAge: '1d' }));
+app.use(express.static(path.join(__dirname, './frontend'), { maxAge: '1d' }));
 
 app.use((_req, res) => {
   res.status(404).json({ message: 'Route introuvable.' });
