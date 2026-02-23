@@ -13,6 +13,7 @@ const fs        = require('fs');
 require('dotenv').config();
 
 const app  = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 const REQUIRED_ENV = ['SESSION_SECRET', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
@@ -141,6 +142,7 @@ const db = mysql.createPool({
   database:           process.env.DB_NAME,
   port:               Number(process.env.DB_PORT) || 3306,
   waitForConnections: true,
+  ssl: { rejectUnauthorized: false },
   connectionLimit:    10,
   charset:            'utf8mb4',
   connectTimeout:     10000,
