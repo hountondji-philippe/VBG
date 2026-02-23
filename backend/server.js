@@ -279,7 +279,7 @@ app.get('/api/admin/temoignages', requireAdmin, limitAdmin, async (req, res) => 
       `SELECT id, LEFT(message, 180) AS apercu, fichiers_json, statut, date_envoi
        FROM temoignages ${where}
        ORDER BY date_envoi DESC LIMIT ? OFFSET ?`,
-      [...wParam, limit, offset]
+      [...wParam, Number(limit), Number(offset)]
     );
 
     res.json({ total, page, pages: Math.ceil(total / limit), rows });
