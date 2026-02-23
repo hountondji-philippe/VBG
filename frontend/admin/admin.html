@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex, nofollow"/>
+  <title>Admin — VBG</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="admin.css"/>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">VBG</div>
+    <div class="login-sub">Espace d'administration sécurisé</div>
+
+    <div class="field">
+      <label for="usr">Identifiant</label>
+      <input id="usr" type="text" autocomplete="username" placeholder="admin"/>
+    </div>
+
+    <div class="field">
+      <label for="pwd">Mot de passe</label>
+      <input id="pwd" type="password" autocomplete="current-password" placeholder="••••••••"/>
+    </div>
+
+    <button class="login-btn" id="login-btn">Se connecter</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div id="admin-screen">
+
+  <nav class="sidebar">
+    <div class="sb-logo">VBG</div>
+    <div class="sb-sub">Administration</div>
+    <button class="sb-btn active" data-view="dashboard">📊&nbsp; Tableau de bord</button>
+    <button class="sb-btn"        data-view="temoignages">💬&nbsp; Témoignages</button>
+    <button class="sb-logout" id="logout-btn">← Déconnexion</button>
+  </nav>
+
+  <main class="main">
+
+    <!-- Vue : Tableau de bord -->
+    <div id="view-dashboard" class="view active">
+      <div class="topbar">
+        <h1>Tableau de bord</h1>
+        <small id="refresh-time"></small>
+      </div>
+
+      <div class="stats">
+        <div class="stat-card"><div class="n n-or" id="s-total">—</div><div class="l">Total</div></div>
+        <div class="stat-card"><div class="n n-bl" id="s-nouveau">—</div><div class="l">Nouveaux</div></div>
+        <div class="stat-card"><div class="n n-am" id="s-encours">—</div><div class="l">En cours</div></div>
+        <div class="stat-card"><div class="n n-gr" id="s-traite">—</div><div class="l">Traités</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Derniers témoignages reçus</div>
+        <div id="recent-body"></div>
+      </div>
+    </div>
+
+    <!-- Vue : Témoignages -->
+    <div id="view-temoignages" class="view">
+      <div class="topbar">
+        <h1>Témoignages</h1>
+      </div>
+
+      <div class="filters" id="filters">
+        <button class="f-btn active" data-statut="">Tous</button>
+        <button class="f-btn" data-statut="nouveau">Nouveaux</button>
+        <button class="f-btn" data-statut="en_cours">En cours</button>
+        <button class="f-btn" data-statut="traite">Traités</button>
+        <button class="f-btn" data-statut="archive">Archivés</button>
+      </div>
+
+      <div class="card">
+        <div id="list-body"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+
+    <div class="modal-hdr">
+      <h2>Témoignage <span id="m-id"></span></h2>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+
+    <div class="ddate" id="m-date"></div>
+
+    <div class="dlabel">Message</div>
+    <div class="dtext" id="m-msg"></div>
+
+    <div id="m-files-wrap">
+      <div class="dlabel">Fichiers joints</div>
+      <div class="chips" id="m-chips"></div>
+    </div>
+
+    <div class="form-row">
+      <label for="m-statut">Statut</label>
+      <select id="m-statut">
+        <option value="nouveau">Nouveau</option>
+        <option value="en_cours">En cours</option>
+        <option value="traite">Traité</option>
+        <option value="archive">Archivé</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="m-notes">Notes internes (non visibles par les visiteurs)</label>
+      <textarea id="m-notes" maxlength="2000" placeholder="Vos notes ici…"></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="save-btn" id="m-save">Enregistrer</button>
+      <button class="delete-btn" id="m-delete">Supprimer</button>
+    </div>
+
+    <div class="confirm-box" id="confirm-box">
+      <p>Supprimer définitivement ce témoignage ? Cette action est irréversible.</p>
+      <div class="confirm-actions">
+        <button class="confirm-cancel" id="confirm-cancel">Annuler</button>
+        <button class="confirm-ok" id="confirm-ok">Oui, supprimer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script src="admin.js"></script>
+</body>
+</html>

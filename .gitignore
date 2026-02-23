@@ -1,0 +1,22 @@
+# ══════════════════════════════════════════
+# .gitignore — fichiers à NE JAMAIS envoyer sur GitHub
+# ══════════════════════════════════════════
+
+# Variables d'environnement (mots de passe, clés secrètes)
+.env
+.env.local
+.env.production
+
+# Fichiers uploadés par les utilisateurs
+backend/uploads/
+
+# Dépendances Node.js (trop lourdes, se reinstallent avec npm install)
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Fichiers systèmes
+.DS_Store
+Thumbs.db

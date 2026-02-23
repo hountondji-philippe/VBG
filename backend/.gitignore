@@ -1,0 +1,7 @@
+node_modules/
+.env
+cookies.txt
+uploads/*
+!uploads/.gitkeep
+.history/
+*.log
