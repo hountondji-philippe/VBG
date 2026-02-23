@@ -27,9 +27,8 @@ CREATE TABLE IF NOT EXISTS admins (
   created_at    DATETIME     NOT NULL DEFAULT (NOW())
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Index pour accélérer les recherches fréquentes
-CREATE INDEX IF NOT EXISTS idx_statut     ON temoignages (statut);
-CREATE INDEX IF NOT EXISTS idx_date_envoi ON temoignages (date_envoi);
+CREATE INDEX idx_statut     ON temoignages (statut);
+CREATE INDEX idx_date_envoi ON temoignages (date_envoi);
 
 -- Utilisateur MySQL avec droits limités (jamais root pour l'application)
 CREATE USER IF NOT EXISTS 'vbg_user'@'localhost'
