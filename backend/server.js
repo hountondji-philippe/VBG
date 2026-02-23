@@ -146,7 +146,7 @@ const db = mysql.createPool({
   connectionLimit:    10,
   charset:            'utf8mb4',
   connectTimeout:     10000,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined,
+  ssl: { rejectUnauthorized: false },
 });
 
 const sanitize = (s, max = 5000) => typeof s === 'string' ? s.trim().slice(0, max) : '';
