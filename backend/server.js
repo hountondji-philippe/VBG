@@ -81,13 +81,13 @@ app.use(session({
 }));
 
 const limitPublic = rateLimit({
-  windowMs: 60 * 60 * 1000, max: 5,
+  windowMs: 60 * 60 * 1000, max: 100,
   standardHeaders: true, legacyHeaders: false,
   message: { message: 'Trop de requêtes. Réessayez dans 1 heure.' }
 });
 
 const limitLogin = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 5,
+  windowMs: 15 * 60 * 1000, max: 20,
   standardHeaders: true, legacyHeaders: false,
   message: { message: 'Trop de tentatives. Réessayez dans 15 minutes.' }
 });
