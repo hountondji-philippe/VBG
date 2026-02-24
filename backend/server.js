@@ -275,11 +275,11 @@ app.get('/api/admin/temoignages', requireAdmin, limitAdmin, async (req, res) => 
     const [[{ total }]] = await db.execute(
       `SELECT COUNT(*) AS total FROM temoignages ${where}`, wParam
     );
-    const [rows] = await db.execute(
+    const [rows] = await db.query(
       `SELECT id, LEFT(message, 180) AS apercu, fichiers_json, statut, date_envoi
        FROM temoignages ${where}
-       ORDER BY date_envoi DESC LIMIT ? OFFSET ?`,
-      [...wParam, Number(limit), Number(offset)]
+       ORDER BY date_envoi DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
+      wParam
     );
 
     res.json({ total, page, pages: Math.ceil(total / limit), rows });
