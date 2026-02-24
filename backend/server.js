@@ -20,6 +20,25 @@ const cloudinaryStorage = new CloudinaryStorage({
   }),
 });
 
+
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const cloudinaryStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => ({
+    folder: 'vbg-temoignages',
+    resource_type: file.mimetype.startsWith('video') ? 'video' : file.mimetype.startsWith('audio') ? 'video' : 'image',
+    public_id: Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9]/g, '_'),
+  }),
+});
+
 const multer    = require('multer');
 const mysql     = require('mysql2/promise');
 const cors      = require('cors');
