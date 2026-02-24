@@ -136,14 +136,7 @@ const MIME_EXT_MAP = {
 };
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-    filename:    (_req, file, cb) => {
-      const ext  = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '');
-      const name = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
-      cb(null, name);
-    }
-  }),
+  storage: cloudinaryStorage,
   fileFilter: (_req, file, cb) => {
     if (!MIME_OK.has(file.mimetype)) return cb(new Error('Type refusé'));
     const ext     = path.extname(file.originalname).toLowerCase();
@@ -195,7 +188,7 @@ app.post('/api/temoignage', limitPublic, upload.array('fichiers', 3), async (req
     }
 
     const fichiers = (req.files || []).map(f => ({
-      nom: f.filename, type: f.mimetype, taille: f.size
+      nom: f.originalname, url: f.path || f.secure_url, type: f.mimetype, taille: f.size
     }));
 
     await db.execute(
