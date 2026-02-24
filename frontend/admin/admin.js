@@ -45,6 +45,27 @@ let page    = 1;
 let statut  = '';
 let modalId = null;
 
+// Hamburger menu
+const hamburger = $('hamburger-btn');
+const sidebar   = $('sidebar');
+const overlay   = $('sidebar-overlay');
+
+function openSidebar() {
+  sidebar.classList.add('open');
+  overlay.classList.add('open');
+}
+
+function closeSidebar() {
+  sidebar.classList.remove('open');
+  overlay.classList.remove('open');
+}
+
+hamburger.addEventListener('click', () => {
+  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+});
+
+overlay.addEventListener('click', closeSidebar);
+
 (async () => {
   const { data } = await api('GET', '/api/admin/me');
   if (data.admin) showAdmin();
@@ -102,6 +123,7 @@ document.querySelectorAll('.sb-btn[data-view]').forEach(btn => {
     const viewId = btn.dataset.view === 'dashboard' ? 'view-dashboard' : 'view-temoignages';
     $(viewId).classList.add('active');
     if (btn.dataset.view === 'temoignages') loadList();
+    closeSidebar();
   });
 });
 
@@ -220,37 +242,39 @@ async function openModal(id) {
   if (fichiers.length) {
     fw.style.display = '';
     $('m-chips').innerHTML = fichiers.map(f => {
-      const url    = `/uploads/${encodeURIComponent(f.nom)}`;
-      const taille = Math.round((f.taille || 0) / 1024);
+      // Supporte URL Cloudinary (f.url) et ancien chemin local (f.nom)
+      const url    = f.url || (f.nom ? `/uploads/${encodeURIComponent(f.nom)}` : '');
+      const taille = f.taille ? Math.round(f.taille / 1024) + ' ko' : '';
       const type   = f.type || '';
+      const nom    = f.nom || 'fichier';
       let mediaHtml = '';
 
       if (type.startsWith('image/')) {
         mediaHtml = `
           <div class="media-item">
-            <div class="media-label">Image — ${taille} ko</div>
-            <img src="${url}" alt="Pièce jointe" style="max-width:100%;max-height:300px;border-radius:8px;cursor:pointer;" onclick="window.open('${url}','_blank')">
+            <div class="media-label">Image${taille ? ' — ' + taille : ''}</div>
+            <img src="${esc(url)}" alt="Pièce jointe" onclick="window.open('${esc(url)}','_blank')">
           </div>`;
       } else if (type.startsWith('video/')) {
         mediaHtml = `
           <div class="media-item">
-            <div class="media-label">Vidéo — ${taille} ko</div>
+            <div class="media-label">Vidéo${taille ? ' — ' + taille : ''}</div>
             <video controls style="max-width:100%;max-height:300px;border-radius:8px;">
-              <source src="${url}" type="${esc(type)}">
+              <source src="${esc(url)}" type="${esc(type)}">
               Votre navigateur ne supporte pas la vidéo.
             </video>
           </div>`;
       } else if (type.startsWith('audio/')) {
         mediaHtml = `
           <div class="media-item">
-            <div class="media-label">Audio — ${taille} ko</div>
+            <div class="media-label">Audio${taille ? ' — ' + taille : ''}</div>
             <audio controls style="width:100%;margin-top:6px;">
-              <source src="${url}" type="${esc(type)}">
+              <source src="${esc(url)}" type="${esc(type)}">
               Votre navigateur ne supporte pas l'audio.
             </audio>
           </div>`;
       } else {
-        mediaHtml = `<span class="chip">${esc(type || '?')} — ${taille} ko</span>`;
+        mediaHtml = `<span class="chip">${esc(nom)} — ${taille}</span>`;
       }
       return mediaHtml;
     }).join('');
