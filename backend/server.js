@@ -1,126 +1,170 @@
 'use strict';
 
-const express   = require('express');
-
+const express    = require('express');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const multer     = require('multer');
+const mysql      = require('mysql2/promise');
+const cors       = require('cors');
+const helmet     = require('helmet');
+const rateLimit  = require('express-rate-limit');
+const bcrypt     = require('bcrypt');
+const session    = require('express-session');
+const path       = require('path');
+const fs         = require('fs');
+const crypto     = require('crypto');
+require('dotenv').config();
 
+// ============================================================
+// 1. VALIDATION DES VARIABLES D'ENVIRONNEMENT AU DÉMARRAGE
+// ============================================================
+const REQUIRED_ENV = [
+  'SESSION_SECRET', 'DB_HOST', 'DB_USER',
+  'DB_PASSWORD', 'DB_NAME',
+  'CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'
+];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`[FATAL] Variable manquante : ${key}`);
+    process.exit(1);
+  }
+}
+if (process.env.SESSION_SECRET.length < 64) {
+  console.error('[FATAL] SESSION_SECRET trop court (minimum 64 caractères).');
+  process.exit(1);
+}
+
+// ============================================================
+// 2. CLOUDINARY
+// ============================================================
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key:    process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure:     true,
 });
 
 const cloudinaryStorage = new CloudinaryStorage({
   cloudinary,
-  params: async (req, file) => ({
-    folder: 'vbg-temoignages',
-    resource_type: file.mimetype.startsWith('video') ? 'video' : file.mimetype.startsWith('audio') ? 'video' : 'image',
-    public_id: Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9]/g, '_'),
+  params: async (_req, file) => ({
+    folder:        'vbg-temoignages',
+    resource_type: file.mimetype.startsWith('video') || file.mimetype.startsWith('audio')
+                   ? 'video' : 'image',
+    public_id:     crypto.randomBytes(16).toString('hex'), // nom aléatoire, jamais devinable
+    overwrite:     false,
   }),
 });
 
-const multer    = require('multer');
-const mysql     = require('mysql2/promise');
-const cors      = require('cors');
-const helmet    = require('helmet');
-const rateLimit = require('express-rate-limit');
-const bcrypt    = require('bcrypt');
-const session   = require('express-session');
-const path      = require('path');
-const fs        = require('fs');
-require('dotenv').config();
-
-const app  = express();
+// ============================================================
+// 3. APP EXPRESS
+// ============================================================
+const app = express();
 app.set('trust proxy', 1);
-const PORT = process.env.PORT || 3000;
+app.disable('x-powered-by');
 
-const REQUIRED_ENV = ['SESSION_SECRET', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
-for (const key of REQUIRED_ENV) {
-  if (!process.env[key]) {
-    console.error(`Variable manquante : ${key}`);
-    process.exit(1);
-  }
-}
-if (process.env.SESSION_SECRET.length < 32) {
-  console.error('SESSION_SECRET trop court (minimum 32 caractères).');
-  process.exit(1);
-}
+const PORT = process.env.PORT || 3000;
 
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+// ============================================================
+// 4. HELMET — Headers de sécurité HTTP
+// ============================================================
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'"],
-      styleSrc:   ["'self'", 'https://fonts.googleapis.com', "'unsafe-inline'"],
-      fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc:     ["'self'", 'data:', 'blob:'],
-      mediaSrc:   ["'self'", 'blob:'],
-      connectSrc: ["'self'"],
-      frameSrc:   ["'none'"],
-      objectSrc:  ["'none'"],
+      defaultSrc:              ["'self'"],
+      scriptSrc:               ["'self'"],
+      styleSrc:                ["'self'", 'https://fonts.googleapis.com', "'unsafe-inline'"],
+      fontSrc:                 ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc:                  ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com'],
+      mediaSrc:                ["'self'", 'blob:', 'https://res.cloudinary.com'],
+      connectSrc:              ["'self'"],
+      frameSrc:                ["'none'"],
+      objectSrc:               ["'none'"],
+      baseUri:                 ["'self'"],
+      formAction:              ["'self'"],
+      frameAncestors:          ["'none'"],
+      upgradeInsecureRequests: [],
     }
   },
-  crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: 'same-origin' },
+  crossOriginEmbedderPolicy:    false,
+  crossOriginResourcePolicy:    { policy: 'cross-origin' },
+  hsts:                         { maxAge: 31536000, includeSubDomains: true, preload: true },
+  noSniff:                      true,
+  frameguard:                   { action: 'deny' },
+  permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+  referrerPolicy:               { policy: 'no-referrer' },
 }));
 
-const ALLOWED = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(',').map(u => u.trim())
+// ============================================================
+// 5. CORS
+// ============================================================
+const ALLOWED_ORIGINS = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map(u => u.trim()).filter(Boolean)
   : [];
 
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
-    if (ALLOWED.includes(origin)) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
     cb(new Error('CORS refusé'));
   },
   methods:        ['GET', 'POST', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type'],
-  credentials:    true
+  credentials:    true,
 }));
 
-app.use(express.json({ limit: '50kb' }));
-app.use(express.urlencoded({ extended: false, limit: '50kb' }));
+// ============================================================
+// 6. BODY PARSERS
+// ============================================================
+app.use(express.json({ limit: '20kb' }));
+app.use(express.urlencoded({ extended: false, limit: '20kb' }));
 
+// ============================================================
+// 7. SESSIONS
+// ============================================================
 app.use(session({
-  name:   'vbg_sid',
-  secret: process.env.SESSION_SECRET,
-  resave: false,
+  name:              'vbg_sid',
+  secret:            process.env.SESSION_SECRET,
+  resave:            false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge:   60 * 60 * 1000
+    maxAge:   60 * 60 * 1000,
   }
 }));
 
+// ============================================================
+// 8. RATE LIMITERS
+// ============================================================
 const limitPublic = rateLimit({
-  windowMs: 60 * 60 * 1000, max: 100,
+  windowMs: 60 * 60 * 1000, max: 10,
   standardHeaders: true, legacyHeaders: false,
-  message: { message: 'Trop de requêtes. Réessayez dans 1 heure.' }
+  message: { message: 'Trop de requêtes. Réessayez dans 1 heure.' },
 });
 
 const limitLogin = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 20,
+  windowMs: 15 * 60 * 1000, max: 5,
   standardHeaders: true, legacyHeaders: false,
-  message: { message: 'Trop de tentatives. Réessayez dans 15 minutes.' }
+  message: { message: 'Trop de tentatives. Réessayez dans 15 minutes.' },
 });
 
 const limitAdmin = rateLimit({
   windowMs: 60 * 1000, max: 60,
   standardHeaders: true, legacyHeaders: false,
-  message: { message: 'Ralentissez.' }
+  message: { message: 'Ralentissez.' },
 });
 
+// ============================================================
+// 9. MULTER — Upload sécurisé
+// ============================================================
 const MIME_OK = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'audio/mpeg', 'audio/wav', 'audio/ogg',
-  'video/mp4',  'video/webm'
+  'video/mp4',  'video/webm',
 ]);
 
 const MIME_EXT_MAP = {
@@ -138,15 +182,25 @@ const MIME_EXT_MAP = {
 const upload = multer({
   storage: cloudinaryStorage,
   fileFilter: (_req, file, cb) => {
-    if (!MIME_OK.has(file.mimetype)) return cb(new Error('Type refusé'));
+    if (!MIME_OK.has(file.mimetype))
+      return cb(new Error('Type de fichier non autorisé.'));
     const ext     = path.extname(file.originalname).toLowerCase();
     const allowed = MIME_EXT_MAP[file.mimetype] || [];
-    if (!allowed.includes(ext)) return cb(new Error('Extension ne correspond pas au type de fichier'));
+    if (!allowed.includes(ext))
+      return cb(new Error('Extension non cohérente avec le type de fichier.'));
     cb(null, true);
   },
-  limits: { fileSize: 20 * 1024 * 1024, files: 3 }
+  limits: {
+    fileSize:  20 * 1024 * 1024,
+    files:     3,
+    fields:    5,
+    fieldSize: 20 * 1024,
+  },
 });
 
+// ============================================================
+// 10. BASE DE DONNÉES
+// ============================================================
 const db = mysql.createPool({
   host:               process.env.DB_HOST,
   user:               process.env.DB_USER,
@@ -154,75 +208,104 @@ const db = mysql.createPool({
   database:           process.env.DB_NAME,
   port:               Number(process.env.DB_PORT) || 3306,
   waitForConnections: true,
-  ssl: { rejectUnauthorized: false },
+  ssl:                { rejectUnauthorized: false },
   connectionLimit:    10,
   charset:            'utf8mb4',
   connectTimeout:     10000,
-  ssl: { rejectUnauthorized: false },
+  timezone:           'Z',
 });
 
-const sanitize = (s, max = 5000) => typeof s === 'string' ? s.trim().slice(0, max) : '';
+// ============================================================
+// 11. HELPERS
+// ============================================================
+const sanitize = (s, max = 5000) =>
+  typeof s === 'string' ? s.trim().slice(0, max) : '';
 
 function requireAdmin(req, res, next) {
   if (req.session?.admin === true) return next();
-  res.status(401).json({ message: 'Non autorisé.' });
+  setTimeout(() => res.status(401).json({ message: 'Non autorisé.' }), 100);
 }
 
-async function deleteUploadedFiles(files) {
-  if (!files?.length) return;
-  for (const f of files) {
-    try { fs.unlinkSync(path.join(UPLOAD_DIR, f.filename)); } catch {}
+function requireSessionFresh(req, res, next) {
+  const MAX_AGE = 60 * 60 * 1000;
+  if (!req.session.loginAt || Date.now() - req.session.loginAt > MAX_AGE) {
+    req.session.destroy(() => {});
+    return res.status(401).json({ message: 'Session expirée. Reconnectez-vous.' });
+  }
+  next();
+}
+
+async function deleteCloudinaryFile(f) {
+  try {
+    if (!f?.public_id) return;
+    const rtype = (f.resource_type === 'video' || f.resource_type === 'audio')
+                  ? 'video' : 'image';
+    await cloudinary.uploader.destroy(f.public_id, { resource_type: rtype });
+  } catch (err) {
+    console.error('[cloudinary delete]', err.message);
   }
 }
 
+// ============================================================
+// 12. ROUTE PUBLIQUE — Envoi témoignage
+// ============================================================
 app.post('/api/temoignage', limitPublic, upload.array('fichiers', 3), async (req, res) => {
   try {
     const message = sanitize(req.body.message || '');
-    if (!message && !(req.files?.length)) {
-      await deleteUploadedFiles(req.files);
-      return res.status(400).json({ message: 'Contenu vide.' });
-    }
-    if (message.length > 5000) {
-      await deleteUploadedFiles(req.files);
-      return res.status(400).json({ message: 'Message trop long.' });
-    }
 
+    if (!message && !(req.files?.length))
+      return res.status(400).json({ message: 'Contenu vide.' });
+
+    if (message.length > 5000)
+      return res.status(400).json({ message: 'Message trop long (max 5000 caractères).' });
+
+    // CORRECTION : secure_url vient de f.path avec multer-storage-cloudinary
     const fichiers = (req.files || []).map(f => ({
-      nom: f.originalname, url: f.path || f.secure_url, type: f.mimetype, taille: f.size
+      nom:           f.originalname.slice(0, 100),
+      secure_url:    f.path,
+      url:           f.path,
+      resource_type: f.mimetype.startsWith('image') ? 'image'
+                   : f.mimetype.startsWith('video') ? 'video'
+                   : f.mimetype.startsWith('audio') ? 'audio'
+                   : 'raw',
+      type:          f.mimetype,
+      taille:        f.size,
+      public_id:     f.filename,
     }));
 
     await db.execute(
       'INSERT INTO temoignages (message, fichiers_json) VALUES (?, ?)',
-      [message, JSON.stringify(fichiers)]
+      [message || null, JSON.stringify(fichiers)]
     );
 
     res.status(201).json({ success: true });
   } catch (err) {
-    await deleteUploadedFiles(req.files);
     console.error('[temoignage]', err.message);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
 
+// ============================================================
+// 13. ROUTES ADMIN — Auth
+// ============================================================
 app.post('/api/admin/login', limitLogin, async (req, res) => {
   try {
     const username = sanitize(req.body.username || '', 50);
     const password = String(req.body.password || '').slice(0, 200);
 
-    if (!username || !password) {
+    if (!username || !password)
       return res.status(400).json({ message: 'Identifiants manquants.' });
-    }
 
     const [rows] = await db.execute(
       'SELECT password_hash FROM admins WHERE username = ? LIMIT 1',
       [username]
     );
 
-    const hash  = rows[0]?.password_hash || '$2b$12$invaliiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii';
+    const hash  = rows[0]?.password_hash || '$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     const valid = await bcrypt.compare(password, hash);
 
     if (!valid || !rows[0]) {
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 500 + Math.random() * 200));
       return res.status(401).json({ message: 'Identifiants incorrects.' });
     }
 
@@ -255,11 +338,14 @@ app.get('/api/admin/me', (req, res) => {
   res.json({ admin: req.session?.admin === true });
 });
 
-app.get('/api/admin/stats', requireAdmin, limitAdmin, async (_req, res) => {
+// ============================================================
+// 14. ROUTES ADMIN — Données
+// ============================================================
+app.get('/api/admin/stats', requireAdmin, requireSessionFresh, limitAdmin, async (_req, res) => {
   try {
     const [[stats]] = await db.execute(`
       SELECT
-        COUNT(*) AS total,
+        COUNT(*)               AS total,
         SUM(statut='nouveau')  AS nouveaux,
         SUM(statut='en_cours') AS en_cours,
         SUM(statut='traite')   AS traites,
@@ -273,16 +359,16 @@ app.get('/api/admin/stats', requireAdmin, limitAdmin, async (_req, res) => {
   }
 });
 
-app.get('/api/admin/temoignages', requireAdmin, limitAdmin, async (req, res) => {
+app.get('/api/admin/temoignages', requireAdmin, requireSessionFresh, limitAdmin, async (req, res) => {
   try {
     const page   = Math.max(1, parseInt(req.query.page) || 1);
     const limit  = 20;
     const offset = (page - 1) * limit;
-    const STATUTS_VALIDES = ['nouveau', 'en_cours', 'traite', 'archive'];
-    const statut = STATUTS_VALIDES.includes(req.query.statut) ? req.query.statut : null;
 
-    const where  = statut ? 'WHERE statut = ?' : '';
-    const wParam = statut ? [statut] : [];
+    const STATUTS_VALIDES = ['nouveau', 'en_cours', 'traite', 'archive'];
+    const statut  = STATUTS_VALIDES.includes(req.query.statut) ? req.query.statut : null;
+    const where   = statut ? 'WHERE statut = ?' : '';
+    const wParam  = statut ? [statut] : [];
 
     const [[{ total }]] = await db.execute(
       `SELECT COUNT(*) AS total FROM temoignages ${where}`, wParam
@@ -290,26 +376,30 @@ app.get('/api/admin/temoignages', requireAdmin, limitAdmin, async (req, res) => 
     const [rows] = await db.query(
       `SELECT id, LEFT(message, 180) AS apercu, fichiers_json, statut, date_envoi
        FROM temoignages ${where}
-       ORDER BY date_envoi DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
+       ORDER BY date_envoi DESC
+       LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
       wParam
     );
 
-    res.json({ total, page, pages: Math.ceil(total / limit), rows });
+    res.json({ total, page, pages: Math.ceil(total / limit) || 1, rows });
   } catch (err) {
     console.error('[liste]', err.message);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
 
-app.get('/api/admin/temoignages/:id', requireAdmin, limitAdmin, async (req, res) => {
+app.get('/api/admin/temoignages/:id', requireAdmin, requireSessionFresh, limitAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (!id || id < 1) return res.status(400).json({ message: 'ID invalide.' });
 
     const [rows] = await db.execute(
-      'SELECT * FROM temoignages WHERE id = ? LIMIT 1', [id]
+      `SELECT id, message, fichiers_json, statut, notes_admin, date_envoi, date_maj
+       FROM temoignages WHERE id = ? LIMIT 1`,
+      [id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Introuvable.' });
+
     res.json(rows[0]);
   } catch (err) {
     console.error('[detail]', err.message);
@@ -317,7 +407,7 @@ app.get('/api/admin/temoignages/:id', requireAdmin, limitAdmin, async (req, res)
   }
 });
 
-app.patch('/api/admin/temoignages/:id', requireAdmin, limitAdmin, async (req, res) => {
+app.patch('/api/admin/temoignages/:id', requireAdmin, requireSessionFresh, limitAdmin, async (req, res) => {
   try {
     const id     = parseInt(req.params.id);
     const VALIDS = ['nouveau', 'en_cours', 'traite', 'archive'];
@@ -327,10 +417,13 @@ app.patch('/api/admin/temoignages/:id', requireAdmin, limitAdmin, async (req, re
     if (!id || id < 1)            return res.status(400).json({ message: 'ID invalide.' });
     if (!VALIDS.includes(statut)) return res.status(400).json({ message: 'Statut invalide.' });
 
-    await db.execute(
+    const [result] = await db.execute(
       'UPDATE temoignages SET statut = ?, notes_admin = ? WHERE id = ?',
-      [statut, notes, id]
+      [statut, notes || null, id]
     );
+
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Introuvable.' });
+
     res.json({ success: true });
   } catch (err) {
     console.error('[update]', err.message);
@@ -338,7 +431,7 @@ app.patch('/api/admin/temoignages/:id', requireAdmin, limitAdmin, async (req, re
   }
 });
 
-app.delete('/api/admin/temoignages/:id', requireAdmin, limitAdmin, async (req, res) => {
+app.delete('/api/admin/temoignages/:id', requireAdmin, requireSessionFresh, limitAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (!id || id < 1) return res.status(400).json({ message: 'ID invalide.' });
@@ -348,19 +441,11 @@ app.delete('/api/admin/temoignages/:id', requireAdmin, limitAdmin, async (req, r
     );
     if (!rows.length) return res.status(404).json({ message: 'Introuvable.' });
 
-    let fichiers = [];
-    try { fichiers = JSON.parse(rows[0].fichiers_json || '[]'); } catch {}
-
     await db.execute('DELETE FROM temoignages WHERE id = ?', [id]);
 
-    for (const f of fichiers) {
-      try {
-        const fp = path.resolve(UPLOAD_DIR, path.basename(f.nom));
-        if (fp.startsWith(path.resolve(UPLOAD_DIR) + path.sep) && fs.existsSync(fp)) {
-          fs.unlinkSync(fp);
-        }
-      } catch {}
-    }
+    let fichiers = [];
+    try { fichiers = JSON.parse(rows[0].fichiers_json || '[]'); } catch {}
+    for (const f of fichiers) await deleteCloudinaryFile(f);
 
     res.json({ success: true });
   } catch (err) {
@@ -369,81 +454,34 @@ app.delete('/api/admin/temoignages/:id', requireAdmin, limitAdmin, async (req, r
   }
 });
 
-app.get('/uploads/:filename', requireAdmin, (req, res) => {
-  const filename = path.basename(req.params.filename);
-
-  const ext = path.extname(filename).toLowerCase();
-  const ALLOWED_EXT = ['.jpg','.jpeg','.png','.gif','.webp','.mp3','.wav','.ogg','.mp4','.webm'];
-  if (!ALLOWED_EXT.includes(ext)) {
-    return res.status(403).json({ message: 'Type non autorisé.' });
+// ============================================================
+// 15. FICHIERS STATIQUES
+// ============================================================
+app.use(express.static(path.join(__dirname, './frontend'), {
+  maxAge:      '1d',
+  etag:        true,
+  lastModified: true,
+  setHeaders:  (res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
   }
+}));
 
-  const filepath = path.resolve(UPLOAD_DIR, filename);
-
-  if (!filepath.startsWith(path.resolve(UPLOAD_DIR) + path.sep)) {
-    return res.status(403).json({ message: 'Accès refusé.' });
-  }
-
-  if (!fs.existsSync(filepath)) {
-    return res.status(404).json({ message: 'Fichier introuvable.' });
-  }
-
-  const stat     = fs.statSync(filepath);
-  const fileSize = stat.size;
-  const range    = req.headers.range;
-
-  const mimeTypes = {
-    '.mp4': 'video/mp4', '.webm': 'video/webm',
-    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
-    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-    '.png': 'image/png',  '.gif': 'image/gif', '.webp': 'image/webp'
-  };
-  const contentType = mimeTypes[ext] || 'application/octet-stream';
-
-  if (range) {
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    const end   = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-
-    if (isNaN(start) || isNaN(end) || start < 0 || end >= fileSize || start > end) {
-      res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
-      return;
-    }
-
-    const chunkSize = (end - start) + 1;
-    res.writeHead(206, {
-      'Content-Range':  `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges':  'bytes',
-      'Content-Length': chunkSize,
-      'Content-Type':   contentType,
-      'Cache-Control':  'no-store',
-      'Pragma':         'no-cache',
-    });
-    fs.createReadStream(filepath, { start, end }).pipe(res);
-  } else {
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Length', fileSize);
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Pragma', 'no-cache');
-    fs.createReadStream(filepath).pipe(res);
-  }
-});
-
-app.use(express.static(path.join(__dirname, './frontend'), { maxAge: '1d' }));
-
+// ============================================================
+// 16. GESTION DES ERREURS
+// ============================================================
 app.use((_req, res) => {
   res.status(404).json({ message: 'Route introuvable.' });
 });
 
 app.use((err, _req, res, _next) => {
   if (err instanceof multer.MulterError) {
-    const msg = err.code === 'LIMIT_FILE_SIZE'  ? 'Fichier trop grand (max 20 Mo).'
-              : err.code === 'LIMIT_FILE_COUNT' ? 'Maximum 3 fichiers.'
+    const msg = err.code === 'LIMIT_FILE_SIZE'   ? 'Fichier trop grand (max 20 Mo).'
+              : err.code === 'LIMIT_FILE_COUNT'  ? 'Maximum 3 fichiers.'
+              : err.code === 'LIMIT_FIELD_VALUE' ? 'Données trop volumineuses.'
               : err.message;
     return res.status(400).json({ message: msg });
   }
-  if (['Type refusé', 'CORS refusé', 'Extension ne correspond pas au type de fichier'].includes(err.message)) {
+  if (['Type de fichier non autorisé.', 'Extension non cohérente avec le type de fichier.', 'CORS refusé'].includes(err.message)) {
     return res.status(400).json({ message: err.message });
   }
   const detail = process.env.NODE_ENV !== 'production' ? err.message : 'Erreur interne.';
@@ -451,8 +489,10 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ message: detail });
 });
 
+// ============================================================
+// 17. DÉMARRAGE
+// ============================================================
 app.listen(PORT, () => {
   console.log(`VBG Backend  →  http://localhost:${PORT}`);
-  console.log(`Uploads      →  ${UPLOAD_DIR}`);
   console.log(`Mode         →  ${process.env.NODE_ENV || 'development'}`);
 });
