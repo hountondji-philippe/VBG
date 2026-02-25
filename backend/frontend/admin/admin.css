@@ -111,7 +111,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   letter-spacing: 3px;
 }
 
-/* HAMBURGER — à l'intérieur de la topbar mobile */
+/* HAMBURGER */
 .hamburger {
   display: flex;
   flex-direction: column;
@@ -149,10 +149,11 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 .sidebar-overlay.open { display: block; }
 
-/* SIDEBAR */
+/* SIDEBAR — desktop : fixée à gauche */
 .sidebar {
   position: fixed;
-  top: 0; left: 0;
+  top: 0;
+  left: 0;
   width: var(--sidebar-w);
   height: 100vh;
   background: var(--dk);
@@ -394,7 +395,7 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
 #toast.ok   { background: #F0FDF4; color: var(--gr); border: 1px solid #BBF7D0; }
 #toast.err  { background: #FEF2F2; color: var(--rd); border: 1px solid #FECACA; }
 
-/* MEDIA VIEWER - fichiers joints Cloudinary */
+/* MEDIA VIEWER */
 .media-item {
   background: var(--bg);
   border: 1px solid var(--bd);
@@ -424,10 +425,7 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
   border-radius: 8px;
   display: block;
 }
-.media-item audio {
-  width: 100%;
-  margin-top: 6px;
-}
+.media-item audio { width: 100%; margin-top: 6px; }
 #m-chips { display: flex; flex-direction: column; gap: 0; }
 
 /* MODAL ACTIONS */
@@ -508,15 +506,17 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
   /* Afficher la topbar mobile */
   .mobile-topbar { display: flex; }
 
-  /* Sidebar masquée hors écran sur mobile — s'ouvre depuis la DROITE */
+  /* Sidebar : cachée à DROITE, s'ouvre depuis la droite */
   .sidebar {
-    left: auto;
-    right: 0;
-    transform: translateX(100%);
+    left: unset !important;
+    right: 0 !important;
+    transform: translateX(100%) !important;
     width: 240px;
     z-index: 170;
   }
-  .sidebar.open { transform: translateX(0); }
+  .sidebar.open {
+    transform: translateX(0) !important;
+  }
 
   /* Contenu principal */
   .main {
