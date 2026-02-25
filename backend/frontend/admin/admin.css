@@ -508,9 +508,11 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
   /* Afficher la topbar mobile */
   .mobile-topbar { display: flex; }
 
-  /* Sidebar masquée hors écran sur mobile */
+  /* Sidebar masquée hors écran sur mobile — s'ouvre depuis la DROITE */
   .sidebar {
-    transform: translateX(-100%);
+    left: auto;
+    right: 0;
+    transform: translateX(100%);
     width: 240px;
     z-index: 170;
   }
