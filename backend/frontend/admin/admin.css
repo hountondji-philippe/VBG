@@ -51,7 +51,6 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   color: var(--gy);
   margin-bottom: .4rem;
 }
-
 .field input {
   width: 100%;
   border: 1.5px solid var(--bd);
