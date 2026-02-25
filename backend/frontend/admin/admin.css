@@ -92,22 +92,40 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 /* LAYOUT */
 #admin-screen { display: none; }
 
-/* HAMBURGER */
-.hamburger {
+/* TOPBAR MOBILE */
+.mobile-topbar {
   display: none;
   position: fixed;
-  top: 1rem;
-  left: 1rem;
-  z-index: 200;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  top: 0; left: 0; right: 0;
+  height: 56px;
   background: var(--dk);
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  z-index: 190;
+}
+.mobile-topbar .mobile-logo {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--or);
+  letter-spacing: 3px;
+}
+
+/* HAMBURGER — à l'intérieur de la topbar mobile */
+.hamburger {
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 8px;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  position: static;
+  border-radius: 6px;
 }
 .hamburger span {
   display: block;
@@ -115,8 +133,11 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   height: 2px;
   background: var(--wh);
   border-radius: 2px;
-  transition: all .2s;
+  transition: all .25s ease;
 }
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
 /* OVERLAY MOBILE */
 .sidebar-overlay {
@@ -128,6 +149,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 .sidebar-overlay.open { display: block; }
 
+/* SIDEBAR */
 .sidebar {
   position: fixed;
   top: 0; left: 0;
@@ -372,7 +394,7 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
 #toast.ok   { background: #F0FDF4; color: var(--gr); border: 1px solid #BBF7D0; }
 #toast.err  { background: #FEF2F2; color: var(--rd); border: 1px solid #FECACA; }
 
-/* MEDIA VIEWER */
+/* MEDIA VIEWER - fichiers joints Cloudinary */
 .media-item {
   background: var(--bg);
   border: 1px solid var(--bd);
@@ -388,8 +410,24 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
   text-transform: uppercase;
   letter-spacing: .04em;
 }
-.media-item img { max-width: 100%; max-height: 300px; border-radius: 8px; cursor: pointer; }
+.media-item img {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: block;
+}
 .media-item img:hover { opacity: .9; transition: opacity .15s; }
+.media-item video {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  display: block;
+}
+.media-item audio {
+  width: 100%;
+  margin-top: 6px;
+}
 #m-chips { display: flex; flex-direction: column; gap: 0; }
 
 /* MODAL ACTIONS */
@@ -453,34 +491,44 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
 }
 .confirm-ok:hover { background: #b91c1c; }
 
-/* RESPONSIVE */
+/* =====================
+   RESPONSIVE TABLETTE
+   ===================== */
 @media (max-width: 900px) {
-  .stats   { grid-template-columns: repeat(2, 1fr); }
+  .stats { grid-template-columns: repeat(2, 1fr); }
   .sidebar { width: 180px; }
-  .main    { margin-left: 180px; }
-  --sidebar-w: 180px;
+  .main { margin-left: 180px; }
 }
 
+/* =====================
+   RESPONSIVE MOBILE
+   ===================== */
 @media (max-width: 640px) {
-  .hamburger { display: flex; }
 
+  /* Afficher la topbar mobile */
+  .mobile-topbar { display: flex; }
+
+  /* Sidebar masquée hors écran sur mobile */
   .sidebar {
     transform: translateX(-100%);
     width: 240px;
+    z-index: 170;
   }
   .sidebar.open { transform: translateX(0); }
 
+  /* Contenu principal */
   .main {
     margin-left: 0;
     padding: 1rem;
-    padding-top: 4rem;
+    padding-top: 4.5rem;
   }
 
+  /* Stats 2 colonnes */
   .stats { grid-template-columns: repeat(2, 1fr); gap: .6rem; }
   .stat-card { padding: .9rem 1rem; }
   .stat-card .n { font-size: 1.5rem; }
 
-  /* Table mobile : cacher colonnes secondaires */
+  /* Cacher colonnes secondaires dans le tableau */
   thead th:nth-child(3),
   tbody td:nth-child(3),
   thead th:nth-child(5),
@@ -491,31 +539,9 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
   .modal { padding: 1.2rem; }
 
   #toast { left: 1rem; right: 1rem; bottom: 1rem; max-width: none; }
-}
 
-/* TOPBAR MOBILE */
-.mobile-topbar {
-  display: none;
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: 56px;
-  background: #1C1C1C;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 1rem;
-  z-index: 190;
-}
-.mobile-topbar .mobile-logo {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: #E8621A;
-  letter-spacing: 3px;
-}
-
-@media (max-width: 640px) {
-  .mobile-topbar { display: flex; }
-  .hamburger {
-    position: static;
-    background: transparent;
-  }
+  /* Filtres scrollables horizontalement */
+  .filters { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .3rem; }
+  .filters::-webkit-scrollbar { height: 3px; }
+  .filters::-webkit-scrollbar-thumb { background: var(--bd); border-radius: 2px; }
 }
