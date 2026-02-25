@@ -492,3 +492,30 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
 
   #toast { left: 1rem; right: 1rem; bottom: 1rem; max-width: none; }
 }
+
+/* TOPBAR MOBILE */
+.mobile-topbar {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 56px;
+  background: #1C1C1C;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  z-index: 190;
+}
+.mobile-topbar .mobile-logo {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #E8621A;
+  letter-spacing: 3px;
+}
+
+@media (max-width: 640px) {
+  .mobile-topbar { display: flex; }
+  .hamburger {
+    position: static;
+    background: transparent;
+  }
+}
