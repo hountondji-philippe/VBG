@@ -530,13 +530,23 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
   .stat-card { padding: .9rem 1rem; }
   .stat-card .n { font-size: 1.5rem; }
 
-  /* Cacher colonnes secondaires dans le tableau */
-  thead th:nth-child(3),
-  tbody td:nth-child(3),
-  thead th:nth-child(5),
-  tbody td:nth-child(5) { display: none; }
+ /* Réduire taille des colonnes sur mobile */
+thead th:nth-child(3),
+tbody td:nth-child(3),
+thead th:nth-child(5),
+tbody td:nth-child(5) { display: none; }
 
-  .td-msg { max-width: 140px; }
+thead th:nth-child(1),
+tbody td:nth-child(1) { width: 30px; font-size: .72rem; padding: .5rem .4rem; }
+
+.td-msg { max-width: 100px; }
+.td-msg p { font-size: .78rem; }
+
+tbody td:nth-child(4) { padding: .5rem .4rem; }
+.badge { font-size: .62rem; padding: .18rem .45rem; }
+
+tbody td:last-child { padding: .5rem .4rem; }
+.btn-open { padding: .28rem .5rem; font-size: .7rem; }
 
   .modal { padding: 1.2rem; }
 
