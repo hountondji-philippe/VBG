@@ -45,7 +45,9 @@ let page    = 1;
 let statut  = '';
 let modalId = null;
 
-// Hamburger menu
+/* =====================
+   HAMBURGER MENU
+   ===================== */
 const hamburger = $('hamburger-btn');
 const sidebar   = $('sidebar');
 const overlay   = $('sidebar-overlay');
@@ -53,11 +55,13 @@ const overlay   = $('sidebar-overlay');
 function openSidebar() {
   sidebar.classList.add('open');
   overlay.classList.add('open');
+  hamburger.classList.add('open');
 }
 
 function closeSidebar() {
   sidebar.classList.remove('open');
   overlay.classList.remove('open');
+  hamburger.classList.remove('open');
 }
 
 hamburger.addEventListener('click', () => {
@@ -66,6 +70,9 @@ hamburger.addEventListener('click', () => {
 
 overlay.addEventListener('click', closeSidebar);
 
+/* =====================
+   AUTH
+   ===================== */
 (async () => {
   const { data } = await api('GET', '/api/admin/me');
   if (data.admin) showAdmin();
@@ -127,6 +134,9 @@ document.querySelectorAll('.sb-btn[data-view]').forEach(btn => {
   });
 });
 
+/* =====================
+   STATS & LISTES
+   ===================== */
 async function loadStats() {
   const { ok, data } = await api('GET', '/api/admin/stats');
   if (!ok) return;
@@ -163,7 +173,16 @@ function renderTable(rows) {
   }
 
   const lignes = rows.map(r => {
-    const nb = (() => { try { return JSON.parse(r.fichiers_json || '[]').length; } catch { return 0; } })();
+    // CORRECTION : fichiers_json peut être déjà un tableau (parsé par mysql2)
+    // ou une string JSON — on gère les deux cas
+    const nb = (() => {
+      try {
+        const f = r.fichiers_json;
+        if (Array.isArray(f)) return f.length;
+        if (!f) return 0;
+        return JSON.parse(f).length;
+      } catch { return 0; }
+    })();
     return `
       <tr>
         <td>${esc(String(r.id))}</td>
@@ -222,6 +241,95 @@ $('filters').addEventListener('click', e => {
   loadList();
 });
 
+/* =====================
+   FICHIERS CLOUDINARY
+   ===================== */
+function parseFichiers(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
+function getFichierUrl(f) {
+  return f.secure_url || f.url || (f.nom ? `/uploads/${encodeURIComponent(f.nom)}` : '') || '';
+}
+
+function getFichierType(f, url) {
+  if (f.resource_type === 'image') return 'image';
+  if (f.resource_type === 'video') return 'video';
+  if (f.resource_type === 'raw')   return 'audio';
+
+  const t = f.type || '';
+  if (t.startsWith('image/')) return 'image';
+  if (t.startsWith('video/')) return 'video';
+  if (t.startsWith('audio/')) return 'audio';
+
+  if (/\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(url)) return 'image';
+  if (/\.(mp4|mov|avi|webm|mkv)$/i.test(url))       return 'video';
+  if (/\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(url))   return 'audio';
+
+  return 'autre';
+}
+
+function renderFichiers(raw) {
+  const fichiers = parseFichiers(raw);
+  if (!fichiers.length) return '';
+
+  return fichiers.map(f => {
+    const url    = getFichierUrl(f);
+    if (!url) return '';
+
+    const type   = getFichierType(f, url);
+    const bytes  = f.taille || f.bytes || 0;
+    const taille = bytes ? Math.round(bytes / 1024) + ' ko' : '';
+
+    if (type === 'image') {
+      return `
+        <div class="media-item">
+          <div class="media-label">📷 Image${taille ? ' — ' + taille : ''}</div>
+          <img src="${esc(url)}" alt="Pièce jointe" onclick="window.open('${esc(url)}','_blank')"/>
+        </div>`;
+    }
+
+    if (type === 'video') {
+      return `
+        <div class="media-item">
+          <div class="media-label">🎬 Vidéo${taille ? ' — ' + taille : ''}</div>
+          <video controls style="max-width:100%;max-height:300px;border-radius:8px;display:block;">
+            <source src="${esc(url)}"/>
+            Votre navigateur ne supporte pas la vidéo.
+          </video>
+          <a href="${esc(url)}" target="_blank" class="chip" style="display:inline-block;margin-top:.5rem;">
+            ⬇ Télécharger
+          </a>
+        </div>`;
+    }
+
+    if (type === 'audio') {
+      return `
+        <div class="media-item">
+          <div class="media-label">🎵 Audio${taille ? ' — ' + taille : ''}</div>
+          <audio controls style="width:100%;margin-top:6px;">
+            <source src="${esc(url)}"/>
+            Votre navigateur ne supporte pas l'audio.
+          </audio>
+        </div>`;
+    }
+
+    const nom = f.original_filename || f.public_id || f.nom || 'fichier';
+    return `
+      <div class="media-item">
+        <div class="media-label">📎 Fichier joint</div>
+        <a href="${esc(url)}" target="_blank" class="chip">
+          ${esc(nom)}${taille ? ' — ' + taille : ''}
+        </a>
+      </div>`;
+  }).join('');
+}
+
+/* =====================
+   MODAL
+   ===================== */
 async function openModal(id) {
   modalId = id;
   $('m-id').textContent  = '#' + id;
@@ -236,48 +344,12 @@ async function openModal(id) {
   $('m-statut').value     = data.statut  || 'nouveau';
   $('m-notes').value      = data.notes_admin || '';
 
-  const fichiers = (() => { try { return JSON.parse(data.fichiers_json || '[]'); } catch { return []; } })();
+  const fichiersHtml = renderFichiers(data.fichiers_json);
   const fw = $('m-files-wrap');
 
-  if (fichiers.length) {
-    fw.style.display = '';
-    $('m-chips').innerHTML = fichiers.map(f => {
-      // Supporte URL Cloudinary (f.url) et ancien chemin local (f.nom)
-      const url    = f.url || (f.nom ? `/uploads/${encodeURIComponent(f.nom)}` : '');
-      const taille = f.taille ? Math.round(f.taille / 1024) + ' ko' : '';
-      const type   = f.type || '';
-      const nom    = f.nom || 'fichier';
-      let mediaHtml = '';
-
-      if (type.startsWith('image/')) {
-        mediaHtml = `
-          <div class="media-item">
-            <div class="media-label">Image${taille ? ' — ' + taille : ''}</div>
-            <img src="${esc(url)}" alt="Pièce jointe" onclick="window.open('${esc(url)}','_blank')">
-          </div>`;
-      } else if (type.startsWith('video/')) {
-        mediaHtml = `
-          <div class="media-item">
-            <div class="media-label">Vidéo${taille ? ' — ' + taille : ''}</div>
-            <video controls style="max-width:100%;max-height:300px;border-radius:8px;">
-              <source src="${esc(url)}" type="${esc(type)}">
-              Votre navigateur ne supporte pas la vidéo.
-            </video>
-          </div>`;
-      } else if (type.startsWith('audio/')) {
-        mediaHtml = `
-          <div class="media-item">
-            <div class="media-label">Audio${taille ? ' — ' + taille : ''}</div>
-            <audio controls style="width:100%;margin-top:6px;">
-              <source src="${esc(url)}" type="${esc(type)}">
-              Votre navigateur ne supporte pas l'audio.
-            </audio>
-          </div>`;
-      } else {
-        mediaHtml = `<span class="chip">${esc(nom)} — ${taille}</span>`;
-      }
-      return mediaHtml;
-    }).join('');
+  if (fichiersHtml) {
+    fw.style.display       = '';
+    $('m-chips').innerHTML = fichiersHtml;
   } else {
     fw.style.display = 'none';
   }
