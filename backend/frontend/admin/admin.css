@@ -529,9 +529,7 @@ tbody td { padding: .85rem 1rem; font-size: .84rem; vertical-align: middle; }
   .stats { grid-template-columns: repeat(2, 1fr); gap: .6rem; }
   .stat-card { padding: .9rem 1rem; }
   .stat-card .n { font-size: 1.5rem; }
-
- /* Réduire taille des colonnes sur mobile */
-thead th:nth-child(3),
+ead th:nth-child(3),
 tbody td:nth-child(3),
 thead th:nth-child(5),
 tbody td:nth-child(5) { display: none; }

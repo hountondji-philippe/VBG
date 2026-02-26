@@ -180,21 +180,35 @@ const limitAdmin = rateLimit({
 // 9. MULTER
 // ============================================================
 const MIME_OK = new Set([
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-  'audio/mpeg', 'audio/wav', 'audio/ogg',
-  'video/mp4',  'video/webm',
+  // Images
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif',
+  // Audio
+  'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/aac', 'audio/x-m4a', 'audio/mp4',
+  // Video
+  'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/3gpp',
 ]);
 
 const MIME_EXT_MAP = {
+  // Images
   'image/jpeg': ['.jpg', '.jpeg'],
   'image/png':  ['.png'],
   'image/gif':  ['.gif'],
   'image/webp': ['.webp'],
-  'audio/mpeg': ['.mp3'],
-  'audio/wav':  ['.wav'],
-  'audio/ogg':  ['.ogg'],
-  'video/mp4':  ['.mp4'],
-  'video/webm': ['.webm'],
+  'image/heic': ['.heic'],
+  'image/heif': ['.heif'],
+  // Audio
+  'audio/mpeg':  ['.mp3'],
+  'audio/wav':   ['.wav'],
+  'audio/ogg':   ['.ogg'],
+  'audio/aac':   ['.aac'],
+  'audio/x-m4a': ['.m4a'],
+  'audio/mp4':   ['.m4a', '.mp4'],
+  // Video
+  'video/mp4':       ['.mp4'],
+  'video/webm':      ['.webm'],
+  'video/quicktime': ['.mov'],
+  'video/x-msvideo': ['.avi'],
+  'video/3gpp':      ['.3gp'],
 };
 
 const upload = multer({
