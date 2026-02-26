@@ -173,7 +173,16 @@ function renderTable(rows) {
   }
 
   const lignes = rows.map(r => {
-    const nb = (() => { try { return JSON.parse(r.fichiers_json || '[]').length; } catch { return 0; } })();
+    // CORRECTION : fichiers_json peut être déjà un tableau (parsé par mysql2)
+    // ou une string JSON — on gère les deux cas
+    const nb = (() => {
+      try {
+        const f = r.fichiers_json;
+        if (Array.isArray(f)) return f.length;
+        if (!f) return 0;
+        return JSON.parse(f).length;
+      } catch { return 0; }
+    })();
     return `
       <tr>
         <td>${esc(String(r.id))}</td>
@@ -242,23 +251,19 @@ function parseFichiers(raw) {
 }
 
 function getFichierUrl(f) {
-  // Cloudinary retourne secure_url — on supporte aussi url et l'ancien chemin local
   return f.secure_url || f.url || (f.nom ? `/uploads/${encodeURIComponent(f.nom)}` : '') || '';
 }
 
 function getFichierType(f, url) {
-  // Cloudinary fournit resource_type : 'image', 'video', 'raw'
   if (f.resource_type === 'image') return 'image';
   if (f.resource_type === 'video') return 'video';
   if (f.resource_type === 'raw')   return 'audio';
 
-  // Fallback sur le type MIME
   const t = f.type || '';
   if (t.startsWith('image/')) return 'image';
   if (t.startsWith('video/')) return 'video';
   if (t.startsWith('audio/')) return 'audio';
 
-  // Fallback sur l'extension dans l'URL
   if (/\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(url)) return 'image';
   if (/\.(mp4|mov|avi|webm|mkv)$/i.test(url))       return 'video';
   if (/\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(url))   return 'audio';
@@ -311,7 +316,6 @@ function renderFichiers(raw) {
         </div>`;
     }
 
-    // Fichier générique
     const nom = f.original_filename || f.public_id || f.nom || 'fichier';
     return `
       <div class="media-item">
@@ -340,7 +344,6 @@ async function openModal(id) {
   $('m-statut').value     = data.statut  || 'nouveau';
   $('m-notes').value      = data.notes_admin || '';
 
-  // CORRECTION : renderFichiers gère secure_url Cloudinary
   const fichiersHtml = renderFichiers(data.fichiers_json);
   const fw = $('m-files-wrap');
 
