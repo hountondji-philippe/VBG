@@ -1,418 +1,525 @@
 'use strict';
 
-const API = '';
+const express    = require('express');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const multer     = require('multer');
+const mysql      = require('mysql2/promise');
+const cors       = require('cors');
+const helmet     = require('helmet');
+const rateLimit  = require('express-rate-limit');
+const bcrypt     = require('bcrypt');
+const session    = require('express-session');
+const MySQLStore = require('express-mysql-session')(session);
+const path       = require('path');
+const fs         = require('fs');
+const crypto     = require('crypto');
+require('dotenv').config();
 
-function esc(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function fmtDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('fr-FR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
-}
-
-function mkBadge(s) {
-  const labels = { nouveau: 'Nouveau', en_cours: 'En cours', traite: 'Traité', archive: 'Archivé' };
-  return `<span class="badge b-${esc(s)}">${esc(labels[s] || s)}</span>`;
-}
-
-function toast(msg, ok = true) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className   = `show ${ok ? 'ok' : 'err'}`;
-  setTimeout(() => { t.className = ''; }, 3200);
-}
-
-async function api(method, path, body) {
-  const opt = { method, credentials: 'include', headers: {} };
-  if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-  const r = await fetch(API + path, opt);
-  const d = await r.json().catch(() => ({}));
-  return { ok: r.ok, data: d };
-}
-
-const $ = id => document.getElementById(id);
-
-let page    = 1;
-let statut  = '';
-let modalId = null;
-
-/* =====================
-   HAMBURGER MENU
-   ===================== */
-const hamburger = $('hamburger-btn');
-const sidebar   = $('sidebar');
-const overlay   = $('sidebar-overlay');
-
-function openSidebar() {
-  sidebar.classList.add('open');
-  overlay.classList.add('open');
-  hamburger.classList.add('open');
-}
-
-function closeSidebar() {
-  sidebar.classList.remove('open');
-  overlay.classList.remove('open');
-  hamburger.classList.remove('open');
-}
-
-hamburger.addEventListener('click', () => {
-  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
-});
-
-overlay.addEventListener('click', closeSidebar);
-
-/* =====================
-   AUTH
-   ===================== */
-(async () => {
-  const { data } = await api('GET', '/api/admin/me');
-  if (data.admin) showAdmin();
-})();
-
-async function doLogin() {
-  const u   = $('usr').value.trim();
-  const p   = $('pwd').value;
-  const err = $('login-err');
-  err.style.display = 'none';
-
-  if (!u || !p) {
-    err.textContent   = 'Remplissez tous les champs.';
-    err.style.display = 'block';
-    return;
-  }
-
-  const lb = $('login-btn');
-  lb.disabled    = true;
-  lb.textContent = 'Connexion…';
-
-  const { ok, data } = await api('POST', '/api/admin/login', { username: u, password: p });
-
-  lb.disabled    = false;
-  lb.textContent = 'Se connecter';
-
-  if (ok) {
-    showAdmin();
-  } else {
-    err.textContent   = data.message || 'Identifiants incorrects.';
-    err.style.display = 'block';
+// ============================================================
+// 1. VALIDATION DES VARIABLES D'ENVIRONNEMENT
+// ============================================================
+const REQUIRED_ENV = [
+  'SESSION_SECRET', 'DB_HOST', 'DB_USER',
+  'DB_PASSWORD', 'DB_NAME',
+  'CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'
+];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`[FATAL] Variable manquante : ${key}`);
+    process.exit(1);
   }
 }
-
-function showAdmin() {
-  $('login-screen').style.display = 'none';
-  $('admin-screen').style.display = 'block';
-  loadStats();
-  loadRecent();
+if (process.env.SESSION_SECRET.length < 64) {
+  console.error('[FATAL] SESSION_SECRET trop court (minimum 64 caractères).');
+  process.exit(1);
 }
 
-$('login-btn').addEventListener('click', doLogin);
-$('pwd').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-
-$('logout-btn').addEventListener('click', async () => {
-  await api('POST', '/api/admin/logout');
-  location.reload();
+// ============================================================
+// 2. CLOUDINARY
+// ============================================================
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure:     true,
 });
 
-document.querySelectorAll('.sb-btn[data-view]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.sb-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    btn.classList.add('active');
-    const viewId = btn.dataset.view === 'dashboard' ? 'view-dashboard' : 'view-temoignages';
-    $(viewId).classList.add('active');
-    if (btn.dataset.view === 'temoignages') loadList();
-    closeSidebar();
-  });
+const cloudinaryStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (_req, file) => {
+    let resource_type = 'image';
+    if (file.mimetype.startsWith('video/')) resource_type = 'video';
+    if (file.mimetype.startsWith('audio/')) resource_type = 'video'; // Cloudinary met audio sous 'video'
+    return {
+      folder:        'vbg-temoignages',
+      resource_type,
+      public_id:     crypto.randomBytes(16).toString('hex'),
+      overwrite:     false,
+    };
+  },
 });
 
-/* =====================
-   STATS & LISTES
-   ===================== */
-async function loadStats() {
-  const { ok, data } = await api('GET', '/api/admin/stats');
-  if (!ok) return;
-  $('s-total').textContent    = data.total    ?? '—';
-  $('s-nouveau').textContent  = data.nouveaux ?? '—';
-  $('s-encours').textContent  = data.en_cours ?? '—';
-  $('s-traite').textContent   = data.traites  ?? '—';
-  $('refresh-time').textContent = 'Actualisé à ' + new Date().toLocaleTimeString('fr-FR');
-}
+// ============================================================
+// 3. APP EXPRESS
+// ============================================================
+const app = express();
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
-async function loadRecent() {
-  const el = $('recent-body');
-  el.innerHTML = '<div class="placeholder"><p>Chargement…</p></div>';
-  const { ok, data } = await api('GET', '/api/admin/temoignages?page=1');
-  if (!ok) { el.innerHTML = '<div class="placeholder"><p>Erreur de chargement.</p></div>'; return; }
-  el.innerHTML = renderTable(data.rows);
-  bindOpenBtns(el);
-}
+const PORT = process.env.PORT || 3000;
 
-async function loadList() {
-  const el = $('list-body');
-  el.innerHTML = '<div class="placeholder"><p>Chargement…</p></div>';
-  const q = statut ? `&statut=${statut}` : '';
-  const { ok, data } = await api('GET', `/api/admin/temoignages?page=${page}${q}`);
-  if (!ok) { el.innerHTML = '<div class="placeholder"><p>Erreur.</p></div>'; return; }
-  el.innerHTML = renderTable(data.rows) + renderPager(data);
-  bindOpenBtns(el);
-  bindPager(el, data);
-}
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-function renderTable(rows) {
-  if (!rows.length) {
-    return `<div class="placeholder"><div class="ico">💬</div><p>Aucun témoignage.</p></div>`;
+// ============================================================
+// 4. HELMET
+// ============================================================
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:              ["'self'"],
+      scriptSrc:               ["'self'"],
+      styleSrc:                ["'self'", 'https://fonts.googleapis.com', "'unsafe-inline'"],
+      fontSrc:                 ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc:                  ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com'],
+      mediaSrc:                ["'self'", 'blob:', 'https://res.cloudinary.com'],
+      connectSrc:              ["'self'"],
+      frameSrc:                ["'none'"],
+      objectSrc:               ["'none'"],
+      baseUri:                 ["'self'"],
+      formAction:              ["'self'"],
+      frameAncestors:          ["'none'"],
+      upgradeInsecureRequests: [],
+    }
+  },
+  crossOriginEmbedderPolicy:    false,
+  crossOriginResourcePolicy:    { policy: 'cross-origin' },
+  hsts:                         { maxAge: 31536000, includeSubDomains: true, preload: true },
+  noSniff:                      true,
+  frameguard:                   { action: 'deny' },
+  permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+  referrerPolicy:               { policy: 'no-referrer' },
+}));
+
+// ============================================================
+// 5. CORS
+// ============================================================
+const ALLOWED_ORIGINS = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map(u => u.trim()).filter(Boolean)
+  : [];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error('CORS refusé'));
+  },
+  methods:        ['GET', 'POST', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type'],
+  credentials:    true,
+}));
+
+// ============================================================
+// 6. BODY PARSERS
+// ============================================================
+app.use(express.json({ limit: '20kb' }));
+app.use(express.urlencoded({ extended: false, limit: '20kb' }));
+
+// ============================================================
+// 7. SESSION STORE MySQL (évite les fuites mémoire en prod)
+// ============================================================
+const sessionStore = new MySQLStore({
+  host:               process.env.DB_HOST,
+  port:               Number(process.env.DB_PORT) || 3306,
+  user:               process.env.DB_USER,
+  password:           process.env.DB_PASSWORD,
+  database:           process.env.DB_NAME,
+  ssl:                { rejectUnauthorized: false },
+  clearExpired:       true,
+  checkExpirationInterval: 15 * 60 * 1000,
+  expiration:         60 * 60 * 1000,
+});
+
+app.use(session({
+  name:              'vbg_sid',
+  secret:            process.env.SESSION_SECRET,
+  store:             sessionStore,
+  resave:            false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure:   process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge:   60 * 60 * 1000,
   }
+}));
 
-  const lignes = rows.map(r => {
-    // CORRECTION : fichiers_json peut être déjà un tableau (parsé par mysql2)
-    // ou une string JSON — on gère les deux cas
-    const nb = (() => {
-      try {
-        const f = r.fichiers_json;
-        if (Array.isArray(f)) return f.length;
-        if (!f) return 0;
-        return JSON.parse(f).length;
-      } catch { return 0; }
-    })();
-    return `
-      <tr>
-        <td>${esc(String(r.id))}</td>
-        <td class="td-msg"><p>${esc(r.apercu || '(fichier seul)')}</p></td>
-        <td>${nb ? nb + ' fichier' + (nb > 1 ? 's' : '') : '—'}</td>
-        <td>${mkBadge(r.statut)}</td>
-        <td style="white-space:nowrap;font-size:.8rem">${fmtDate(r.date_envoi)}</td>
-        <td><button class="btn-open" data-id="${esc(String(r.id))}">Ouvrir</button></td>
-      </tr>`;
-  }).join('');
+// ============================================================
+// 8. RATE LIMITERS
+// ============================================================
+const limitPublic = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 10,
+  standardHeaders: true, legacyHeaders: false,
+  message: { message: 'Trop de requêtes. Réessayez dans 1 heure.' },
+});
 
-  return `
-    <table>
-      <thead>
-        <tr><th>#</th><th>Message</th><th>Fichiers</th><th>Statut</th><th>Date</th><th></th></tr>
-      </thead>
-      <tbody>${lignes}</tbody>
-    </table>`;
+const limitLogin = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 5,
+  standardHeaders: true, legacyHeaders: false,
+  message: { message: 'Trop de tentatives. Réessayez dans 15 minutes.' },
+});
+
+const limitAdmin = rateLimit({
+  windowMs: 60 * 1000, max: 60,
+  standardHeaders: true, legacyHeaders: false,
+  message: { message: 'Ralentissez.' },
+});
+
+// ============================================================
+// 9. MULTER
+// ============================================================
+const MIME_OK = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'audio/mpeg', 'audio/wav', 'audio/ogg',
+  'video/mp4',  'video/webm',
+]);
+
+const MIME_EXT_MAP = {
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png':  ['.png'],
+  'image/gif':  ['.gif'],
+  'image/webp': ['.webp'],
+  'audio/mpeg': ['.mp3'],
+  'audio/wav':  ['.wav'],
+  'audio/ogg':  ['.ogg'],
+  'video/mp4':  ['.mp4'],
+  'video/webm': ['.webm'],
+};
+
+const upload = multer({
+  storage: cloudinaryStorage,
+  fileFilter: (_req, file, cb) => {
+    if (!MIME_OK.has(file.mimetype))
+      return cb(new Error('Type de fichier non autorisé.'));
+    const ext     = path.extname(file.originalname).toLowerCase();
+    const allowed = MIME_EXT_MAP[file.mimetype] || [];
+    if (!allowed.includes(ext))
+      return cb(new Error('Extension non cohérente avec le type de fichier.'));
+    cb(null, true);
+  },
+  limits: {
+    fileSize:  20 * 1024 * 1024,
+    files:     3,
+    fields:    5,
+    fieldSize: 20 * 1024,
+  },
+});
+
+// ============================================================
+// 10. BASE DE DONNÉES
+// ============================================================
+const db = mysql.createPool({
+  host:               process.env.DB_HOST,
+  user:               process.env.DB_USER,
+  password:           process.env.DB_PASSWORD,
+  database:           process.env.DB_NAME,
+  port:               Number(process.env.DB_PORT) || 3306,
+  waitForConnections: true,
+  ssl:                { rejectUnauthorized: false },
+  connectionLimit:    10,
+  charset:            'utf8mb4',
+  connectTimeout:     10000,
+  timezone:           'Z',
+});
+
+// ============================================================
+// 11. HELPERS
+// ============================================================
+const sanitize = (s, max = 5000) =>
+  typeof s === 'string' ? s.trim().slice(0, max) : '';
+
+function requireAdmin(req, res, next) {
+  if (req.session?.admin === true) return next();
+  setTimeout(() => res.status(401).json({ message: 'Non autorisé.' }), 100);
 }
 
-function renderPager(d) {
-  if (d.pages <= 1) return '';
-  return `
-    <div class="pager">
-      <span>${d.total} témoignage${d.total > 1 ? 's' : ''}</span>
-      <div class="pager-btns">
-        <button class="p-btn" data-dir="-1" ${d.page <= 1 ? 'disabled' : ''}>‹ Préc.</button>
-        <span style="font-size:.8rem;padding:0 .5rem">${d.page} / ${d.pages}</span>
-        <button class="p-btn" data-dir="1" ${d.page >= d.pages ? 'disabled' : ''}>Suiv. ›</button>
-      </div>
-    </div>`;
+function requireSessionFresh(req, res, next) {
+  const MAX_AGE = 60 * 60 * 1000;
+  if (!req.session.loginAt || Date.now() - req.session.loginAt > MAX_AGE) {
+    req.session.destroy(() => {});
+    return res.status(401).json({ message: 'Session expirée. Reconnectez-vous.' });
+  }
+  next();
 }
 
-function bindOpenBtns(el) {
-  el.querySelectorAll('.btn-open').forEach(btn => {
-    btn.addEventListener('click', () => openModal(parseInt(btn.dataset.id)));
-  });
+async function deleteCloudinaryFile(f) {
+  try {
+    if (!f?.public_id) return;
+    const rtype = (f.resource_type === 'video' || f.resource_type === 'audio')
+                  ? 'video' : 'image';
+    await cloudinary.uploader.destroy(f.public_id, { resource_type: rtype });
+  } catch (err) {
+    console.error('[cloudinary delete]', err.message);
+  }
 }
 
-function bindPager(el, d) {
-  el.querySelectorAll('[data-dir]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      page = Math.max(1, Math.min(d.pages, page + parseInt(btn.dataset.dir)));
-      loadList();
+// ============================================================
+// 12. ROUTE PUBLIQUE — Envoi témoignage
+// ============================================================
+app.post('/api/temoignage', limitPublic, upload.array('fichiers', 3), async (req, res) => {
+  try {
+    const message = sanitize(req.body.message || '');
+
+    if (!message && !(req.files?.length))
+      return res.status(400).json({ message: 'Contenu vide.' });
+
+    if (message.length > 5000)
+      return res.status(400).json({ message: 'Message trop long (max 5000 caractères).' });
+
+    const fichiers = (req.files || []).map(f => {
+      const secure_url    = f.secure_url || f.path || '';
+      const public_id     = f.public_id  || f.filename || '';
+      const resource_type = f.resource_type
+        || (f.mimetype.startsWith('image/') ? 'image'
+          : f.mimetype.startsWith('video/') ? 'video'
+          : f.mimetype.startsWith('audio/') ? 'audio'
+          : 'raw');
+
+      return {
+        nom:           (f.originalname || public_id).slice(0, 100),
+        secure_url,
+        url:           secure_url,
+        resource_type,
+        type:          f.mimetype,
+        taille:        f.size || 0,
+        public_id,
+      };
     });
+
+    await db.execute(
+      'INSERT INTO temoignages (message, fichiers_json) VALUES (?, ?)',
+      [message || null, JSON.stringify(fichiers)]
+    );
+
+    res.status(201).json({ success: true });
+  } catch (err) {
+    console.error('[temoignage]', err.message);
+    res.status(500).json({ message: 'Erreur serveur.' });
+  }
+});
+
+// ============================================================
+// 13. ROUTES ADMIN — Auth
+// ============================================================
+app.post('/api/admin/login', limitLogin, async (req, res) => {
+  try {
+    const username = sanitize(req.body.username || '', 50);
+    const password = String(req.body.password || '').slice(0, 200);
+
+    if (!username || !password)
+      return res.status(400).json({ message: 'Identifiants manquants.' });
+
+    const [rows] = await db.execute(
+      'SELECT password_hash FROM admins WHERE username = ? LIMIT 1',
+      [username]
+    );
+
+    const hash  = rows[0]?.password_hash || '$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const valid = await bcrypt.compare(password, hash);
+
+    if (!valid || !rows[0]) {
+      await new Promise(r => setTimeout(r, 500 + Math.random() * 200));
+      return res.status(401).json({ message: 'Identifiants incorrects.' });
+    }
+
+    await new Promise((resolve, reject) =>
+      req.session.regenerate(err => err ? reject(err) : resolve())
+    );
+
+    req.session.admin   = true;
+    req.session.loginAt = Date.now();
+
+    await new Promise((resolve, reject) =>
+      req.session.save(err => err ? reject(err) : resolve())
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[login]', err.message);
+    res.status(500).json({ message: 'Erreur serveur.' });
+  }
+});
+
+app.post('/api/admin/logout', requireAdmin, (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie('vbg_sid');
+    res.json({ success: true });
   });
-}
-
-$('filters').addEventListener('click', e => {
-  const btn = e.target.closest('.f-btn');
-  if (!btn) return;
-  document.querySelectorAll('.f-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  statut = btn.dataset.statut;
-  page   = 1;
-  loadList();
 });
 
-/* =====================
-   FICHIERS CLOUDINARY
-   ===================== */
-function parseFichiers(raw) {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
-  try { return JSON.parse(raw); } catch { return []; }
-}
+app.get('/api/admin/me', (req, res) => {
+  res.json({ admin: req.session?.admin === true });
+});
 
-function getFichierUrl(f) {
-  return f.secure_url || f.url || (f.nom ? `/uploads/${encodeURIComponent(f.nom)}` : '') || '';
-}
-
-function getFichierType(f, url) {
-  if (f.resource_type === 'image') return 'image';
-  if (f.resource_type === 'video') return 'video';
-  if (f.resource_type === 'raw')   return 'audio';
-
-  const t = f.type || '';
-  if (t.startsWith('image/')) return 'image';
-  if (t.startsWith('video/')) return 'video';
-  if (t.startsWith('audio/')) return 'audio';
-
-  if (/\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(url)) return 'image';
-  if (/\.(mp4|mov|avi|webm|mkv)$/i.test(url))       return 'video';
-  if (/\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(url))   return 'audio';
-
-  return 'autre';
-}
-
-function renderFichiers(raw) {
-  const fichiers = parseFichiers(raw);
-  if (!fichiers.length) return '';
-
-  return fichiers.map(f => {
-    const url    = getFichierUrl(f);
-    if (!url) return '';
-
-    const type   = getFichierType(f, url);
-    const bytes  = f.taille || f.bytes || 0;
-    const taille = bytes ? Math.round(bytes / 1024) + ' ko' : '';
-
-    if (type === 'image') {
-      return `
-        <div class="media-item">
-          <div class="media-label">📷 Image${taille ? ' — ' + taille : ''}</div>
-          <img src="${esc(url)}" alt="Pièce jointe" onclick="window.open('${esc(url)}','_blank')"/>
-        </div>`;
-    }
-
-    if (type === 'video') {
-      return `
-        <div class="media-item">
-          <div class="media-label">🎬 Vidéo${taille ? ' — ' + taille : ''}</div>
-          <video controls style="max-width:100%;max-height:300px;border-radius:8px;display:block;">
-            <source src="${esc(url)}"/>
-            Votre navigateur ne supporte pas la vidéo.
-          </video>
-          <a href="${esc(url)}" target="_blank" class="chip" style="display:inline-block;margin-top:.5rem;">
-            ⬇ Télécharger
-          </a>
-        </div>`;
-    }
-
-    if (type === 'audio') {
-      return `
-        <div class="media-item">
-          <div class="media-label">🎵 Audio${taille ? ' — ' + taille : ''}</div>
-          <audio controls style="width:100%;margin-top:6px;">
-            <source src="${esc(url)}"/>
-            Votre navigateur ne supporte pas l'audio.
-          </audio>
-        </div>`;
-    }
-
-    const nom = f.original_filename || f.public_id || f.nom || 'fichier';
-    return `
-      <div class="media-item">
-        <div class="media-label">📎 Fichier joint</div>
-        <a href="${esc(url)}" target="_blank" class="chip">
-          ${esc(nom)}${taille ? ' — ' + taille : ''}
-        </a>
-      </div>`;
-  }).join('');
-}
-
-/* =====================
-   MODAL
-   ===================== */
-async function openModal(id) {
-  modalId = id;
-  $('m-id').textContent  = '#' + id;
-  $('m-msg').textContent = 'Chargement…';
-  $('modal-bg').classList.add('open');
-
-  const { ok, data } = await api('GET', `/api/admin/temoignages/${id}`);
-  if (!ok) { $('m-msg').textContent = 'Erreur de chargement.'; return; }
-
-  $('m-date').textContent = '📅 ' + fmtDate(data.date_envoi);
-  $('m-msg').textContent  = data.message || '(aucun texte)';
-  $('m-statut').value     = data.statut  || 'nouveau';
-  $('m-notes').value      = data.notes_admin || '';
-
-  const fichiersHtml = renderFichiers(data.fichiers_json);
-  const fw = $('m-files-wrap');
-
-  if (fichiersHtml) {
-    fw.style.display       = '';
-    $('m-chips').innerHTML = fichiersHtml;
-  } else {
-    fw.style.display = 'none';
-  }
-}
-
-function closeModal() {
-  $('modal-bg').classList.remove('open');
-  $('confirm-box').classList.remove('visible');
-  modalId = null;
-}
-
-$('modal-close').addEventListener('click', closeModal);
-$('modal-bg').addEventListener('click', e => { if (e.target === $('modal-bg')) closeModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-
-$('m-save').addEventListener('click', async () => {
-  if (!modalId) return;
-
-  const statutVal = $('m-statut').value;
-  const notes     = $('m-notes').value.trim().slice(0, 2000);
-
-  const { ok, data } = await api('PATCH', `/api/admin/temoignages/${modalId}`, {
-    statut: statutVal,
-    notes
-  });
-
-  if (ok) {
-    toast('Mis à jour avec succès.');
-    closeModal();
-    loadStats();
-    loadList();
-  } else {
-    toast(data.message || 'Erreur lors de la mise à jour.', false);
+// ============================================================
+// 14. ROUTES ADMIN — Données
+// ============================================================
+app.get('/api/admin/stats', requireAdmin, requireSessionFresh, limitAdmin, async (_req, res) => {
+  try {
+    const [[stats]] = await db.execute(`
+      SELECT
+        COUNT(*)               AS total,
+        SUM(statut='nouveau')  AS nouveaux,
+        SUM(statut='en_cours') AS en_cours,
+        SUM(statut='traite')   AS traites,
+        SUM(statut='archive')  AS archives
+      FROM temoignages
+    `);
+    res.json(stats);
+  } catch (err) {
+    console.error('[stats]', err.message);
+    res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
 
-$('m-delete').addEventListener('click', () => {
-  if (!modalId) return;
-  $('confirm-box').classList.add('visible');
-});
+app.get('/api/admin/temoignages', requireAdmin, requireSessionFresh, limitAdmin, async (req, res) => {
+  try {
+    const page   = Math.max(1, parseInt(req.query.page) || 1);
+    const limit  = 20;
+    const offset = (page - 1) * limit;
 
-$('confirm-cancel').addEventListener('click', () => {
-  $('confirm-box').classList.remove('visible');
-});
+    const STATUTS_VALIDES = ['nouveau', 'en_cours', 'traite', 'archive'];
+    const statut  = STATUTS_VALIDES.includes(req.query.statut) ? req.query.statut : null;
+    const where   = statut ? 'WHERE statut = ?' : '';
+    const wParam  = statut ? [statut] : [];
 
-$('confirm-ok').addEventListener('click', async () => {
-  $('confirm-box').classList.remove('visible');
+    const [[{ total }]] = await db.execute(
+      `SELECT COUNT(*) AS total FROM temoignages ${where}`, wParam
+    );
+    const [rows] = await db.query(
+      `SELECT id, LEFT(message, 180) AS apercu, fichiers_json, statut, date_envoi
+       FROM temoignages ${where}
+       ORDER BY date_envoi DESC
+       LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
+      wParam
+    );
 
-  const btn = $('m-delete');
-  btn.disabled    = true;
-  btn.textContent = 'Suppression…';
-
-  const { ok, data } = await api('DELETE', `/api/admin/temoignages/${modalId}`);
-
-  btn.disabled    = false;
-  btn.textContent = 'Supprimer';
-
-  if (ok) {
-    toast('Témoignage supprimé.');
-    closeModal();
-    loadStats();
-    loadList();
-  } else {
-    toast(data.message || 'Erreur lors de la suppression.', false);
+    res.json({ total, page, pages: Math.ceil(total / limit) || 1, rows });
+  } catch (err) {
+    console.error('[liste]', err.message);
+    res.status(500).json({ message: 'Erreur serveur.' });
   }
+});
+
+app.get('/api/admin/temoignages/:id', requireAdmin, requireSessionFresh, limitAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id || id < 1) return res.status(400).json({ message: 'ID invalide.' });
+
+    const [rows] = await db.execute(
+      `SELECT id, message, fichiers_json, statut, notes_admin, date_envoi, date_maj
+       FROM temoignages WHERE id = ? LIMIT 1`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Introuvable.' });
+
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[detail]', err.message);
+    res.status(500).json({ message: 'Erreur serveur.' });
+  }
+});
+
+app.patch('/api/admin/temoignages/:id', requireAdmin, requireSessionFresh, limitAdmin, async (req, res) => {
+  try {
+    const id     = parseInt(req.params.id);
+    const VALIDS = ['nouveau', 'en_cours', 'traite', 'archive'];
+    const statut = req.body.statut;
+    const notes  = sanitize(req.body.notes || '', 2000);
+
+    if (!id || id < 1)            return res.status(400).json({ message: 'ID invalide.' });
+    if (!VALIDS.includes(statut)) return res.status(400).json({ message: 'Statut invalide.' });
+
+    const [result] = await db.execute(
+      'UPDATE temoignages SET statut = ?, notes_admin = ? WHERE id = ?',
+      [statut, notes || null, id]
+    );
+
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Introuvable.' });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[update]', err.message);
+    res.status(500).json({ message: 'Erreur serveur.' });
+  }
+});
+
+app.delete('/api/admin/temoignages/:id', requireAdmin, requireSessionFresh, limitAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id || id < 1) return res.status(400).json({ message: 'ID invalide.' });
+
+    const [rows] = await db.execute(
+      'SELECT fichiers_json FROM temoignages WHERE id = ? LIMIT 1', [id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Introuvable.' });
+
+    await db.execute('DELETE FROM temoignages WHERE id = ?', [id]);
+
+    let fichiers = [];
+    try {
+      const raw = rows[0].fichiers_json;
+      fichiers = Array.isArray(raw) ? raw : JSON.parse(raw || '[]');
+    } catch {}
+    for (const f of fichiers) await deleteCloudinaryFile(f);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[delete]', err.message);
+    res.status(500).json({ message: 'Erreur serveur.' });
+  }
+});
+
+// ============================================================
+// 15. FICHIERS STATIQUES
+// ============================================================
+app.use(express.static(path.join(__dirname, './frontend'), {
+  maxAge:      '1d',
+  etag:        true,
+  lastModified: true,
+  setHeaders:  (res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  }
+}));
+
+// ============================================================
+// 16. GESTION DES ERREURS
+// ============================================================
+app.use((_req, res) => {
+  res.status(404).json({ message: 'Route introuvable.' });
+});
+
+app.use((err, _req, res, _next) => {
+  if (err instanceof multer.MulterError) {
+    const msg = err.code === 'LIMIT_FILE_SIZE'   ? 'Fichier trop grand (max 20 Mo).'
+              : err.code === 'LIMIT_FILE_COUNT'  ? 'Maximum 3 fichiers.'
+              : err.code === 'LIMIT_FIELD_VALUE' ? 'Données trop volumineuses.'
+              : err.message;
+    return res.status(400).json({ message: msg });
+  }
+  if (['Type de fichier non autorisé.', 'Extension non cohérente avec le type de fichier.', 'CORS refusé'].includes(err.message)) {
+    return res.status(400).json({ message: err.message });
+  }
+  const detail = process.env.NODE_ENV !== 'production' ? err.message : 'Erreur interne.';
+  console.error('[erreur]', err.message);
+  res.status(500).json({ message: detail });
+});
+
+// ============================================================
+// 17. DÉMARRAGE
+// ============================================================
+app.listen(PORT, () => {
+  console.log(`VBG Backend  →  http://localhost:${PORT}`);
+  console.log(`Mode         →  ${process.env.NODE_ENV || 'development'}`);
 });
