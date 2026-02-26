@@ -15,9 +15,6 @@ const fs         = require('fs');
 const crypto     = require('crypto');
 require('dotenv').config();
 
-// ============================================================
-// 1. VALIDATION DES VARIABLES D'ENVIRONNEMENT AU DÉMARRAGE
-// ============================================================
 const REQUIRED_ENV = [
   'SESSION_SECRET', 'DB_HOST', 'DB_USER',
   'DB_PASSWORD', 'DB_NAME',
@@ -34,9 +31,6 @@ if (process.env.SESSION_SECRET.length < 64) {
   process.exit(1);
 }
 
-// ============================================================
-// 2. CLOUDINARY
-// ============================================================
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key:    process.env.CLOUDINARY_API_KEY,
@@ -50,14 +44,11 @@ const cloudinaryStorage = new CloudinaryStorage({
     folder:        'vbg-temoignages',
     resource_type: file.mimetype.startsWith('video') || file.mimetype.startsWith('audio')
                    ? 'video' : 'image',
-    public_id:     crypto.randomBytes(16).toString('hex'), // nom aléatoire, jamais devinable
+    public_id:     crypto.randomBytes(16).toString('hex'),
     overwrite:     false,
   }),
 });
 
-// ============================================================
-// 3. APP EXPRESS
-// ============================================================
 const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
@@ -67,9 +58,6 @@ const PORT = process.env.PORT || 3000;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-// ============================================================
-// 4. HELMET — Headers de sécurité HTTP
-// ============================================================
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -97,9 +85,6 @@ app.use(helmet({
   referrerPolicy:               { policy: 'no-referrer' },
 }));
 
-// ============================================================
-// 5. CORS
-// ============================================================
 const ALLOWED_ORIGINS = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map(u => u.trim()).filter(Boolean)
   : [];
@@ -115,15 +100,9 @@ app.use(cors({
   credentials:    true,
 }));
 
-// ============================================================
-// 6. BODY PARSERS
-// ============================================================
 app.use(express.json({ limit: '20kb' }));
 app.use(express.urlencoded({ extended: false, limit: '20kb' }));
 
-// ============================================================
-// 7. SESSIONS
-// ============================================================
 app.use(session({
   name:              'vbg_sid',
   secret:            process.env.SESSION_SECRET,
@@ -137,9 +116,6 @@ app.use(session({
   }
 }));
 
-// ============================================================
-// 8. RATE LIMITERS
-// ============================================================
 const limitPublic = rateLimit({
   windowMs: 60 * 60 * 1000, max: 10,
   standardHeaders: true, legacyHeaders: false,
@@ -158,9 +134,6 @@ const limitAdmin = rateLimit({
   message: { message: 'Ralentissez.' },
 });
 
-// ============================================================
-// 9. MULTER — Upload sécurisé
-// ============================================================
 const MIME_OK = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'audio/mpeg', 'audio/wav', 'audio/ogg',
@@ -198,9 +171,6 @@ const upload = multer({
   },
 });
 
-// ============================================================
-// 10. BASE DE DONNÉES
-// ============================================================
 const db = mysql.createPool({
   host:               process.env.DB_HOST,
   user:               process.env.DB_USER,
@@ -215,9 +185,6 @@ const db = mysql.createPool({
   timezone:           'Z',
 });
 
-// ============================================================
-// 11. HELPERS
-// ============================================================
 const sanitize = (s, max = 5000) =>
   typeof s === 'string' ? s.trim().slice(0, max) : '';
 
@@ -247,7 +214,7 @@ async function deleteCloudinaryFile(f) {
 }
 
 // ============================================================
-// 12. ROUTE PUBLIQUE — Envoi témoignage
+// ROUTE PUBLIQUE — Envoi témoignage
 // ============================================================
 app.post('/api/temoignage', limitPublic, upload.array('fichiers', 3), async (req, res) => {
   try {
@@ -259,19 +226,46 @@ app.post('/api/temoignage', limitPublic, upload.array('fichiers', 3), async (req
     if (message.length > 5000)
       return res.status(400).json({ message: 'Message trop long (max 5000 caractères).' });
 
-    // CORRECTION : secure_url vient de f.path avec multer-storage-cloudinary
-    const fichiers = (req.files || []).map(f => ({
-      nom:           f.originalname.slice(0, 100),
-      secure_url:    f.path,
-      url:           f.path,
-      resource_type: f.mimetype.startsWith('image') ? 'image'
-                   : f.mimetype.startsWith('video') ? 'video'
-                   : f.mimetype.startsWith('audio') ? 'audio'
-                   : 'raw',
-      type:          f.mimetype,
-      taille:        f.size,
-      public_id:     f.filename,
-    }));
+    // DEBUG — visible dans les logs Railway
+    console.log('[upload] nb fichiers reçus :', req.files?.length ?? 0);
+    if (req.files?.length) {
+      req.files.forEach((f, i) => {
+        console.log(`[upload] fichier[${i}] :`, {
+          originalname:  f.originalname,
+          mimetype:      f.mimetype,
+          size:          f.size,
+          path:          f.path,
+          filename:      f.filename,
+          // multer-storage-cloudinary v4 expose aussi ces champs :
+          secure_url:    f.secure_url,
+          public_id:     f.public_id,
+          resource_type: f.resource_type,
+        });
+      });
+    }
+
+    // multer-storage-cloudinary v4 : l'URL est dans f.path OU f.secure_url
+    const fichiers = (req.files || []).map(f => {
+      const secure_url    = f.secure_url || f.path || '';
+      const public_id     = f.public_id  || f.filename || '';
+      const resource_type = f.resource_type
+        || (f.mimetype.startsWith('image') ? 'image'
+          : f.mimetype.startsWith('video') ? 'video'
+          : f.mimetype.startsWith('audio') ? 'audio'
+          : 'raw');
+
+      return {
+        nom:           (f.originalname || public_id).slice(0, 100),
+        secure_url,
+        url:           secure_url,
+        resource_type,
+        type:          f.mimetype,
+        taille:        f.size || 0,
+        public_id,
+      };
+    });
+
+    console.log('[upload] fichiers_json à sauvegarder :', JSON.stringify(fichiers));
 
     await db.execute(
       'INSERT INTO temoignages (message, fichiers_json) VALUES (?, ?)',
@@ -286,7 +280,7 @@ app.post('/api/temoignage', limitPublic, upload.array('fichiers', 3), async (req
 });
 
 // ============================================================
-// 13. ROUTES ADMIN — Auth
+// ROUTES ADMIN — Auth
 // ============================================================
 app.post('/api/admin/login', limitLogin, async (req, res) => {
   try {
@@ -339,7 +333,7 @@ app.get('/api/admin/me', (req, res) => {
 });
 
 // ============================================================
-// 14. ROUTES ADMIN — Données
+// ROUTES ADMIN — Données
 // ============================================================
 app.get('/api/admin/stats', requireAdmin, requireSessionFresh, limitAdmin, async (_req, res) => {
   try {
@@ -455,7 +449,7 @@ app.delete('/api/admin/temoignages/:id', requireAdmin, requireSessionFresh, limi
 });
 
 // ============================================================
-// 15. FICHIERS STATIQUES
+// FICHIERS STATIQUES
 // ============================================================
 app.use(express.static(path.join(__dirname, './frontend'), {
   maxAge:      '1d',
@@ -467,7 +461,7 @@ app.use(express.static(path.join(__dirname, './frontend'), {
 }));
 
 // ============================================================
-// 16. GESTION DES ERREURS
+// GESTION DES ERREURS
 // ============================================================
 app.use((_req, res) => {
   res.status(404).json({ message: 'Route introuvable.' });
@@ -490,7 +484,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // ============================================================
-// 17. DÉMARRAGE
+// DÉMARRAGE
 // ============================================================
 app.listen(PORT, () => {
   console.log(`VBG Backend  →  http://localhost:${PORT}`);
