@@ -1,0 +1,14 @@
+PORT=3000
+NODE_ENV=development
+
+# Base de données PostgreSQL (Neon en prod, local en dev)
+DATABASE_URL=postgresql://vbg_user:VbgLocal2025!@localhost:5432/vbg_db
+
+# Session (générer avec : node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")
+SESSION_SECRET=remplacez_par_64_caracteres_minimum
+
+# Admin
+ADMIN_USERNAME=admin@vbg.bj
+
+# URL Frontend
+FRONTEND_URL=http://localhost:3000

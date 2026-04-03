@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VBG — Briser le Silence en Toute Sécurité</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+
+  <header class="navbar" id="navbar">
+    <div class="navbar-inner">
+      <a href="#accueil" class="navbar-logo">VBG</a>
+      <nav class="navbar-nav" id="navbar-nav">
+        <a href="#accueil"    class="nav-link active">Accueil</a>
+        <a href="#comprendre" class="nav-link">Comprendre les VBG</a>
+        <a href="#exprimer"   class="nav-link">Exprimez-vous</a>
+        <a href="#contact"    class="nav-link">Urgence &amp; Contact</a>
+      </nav>
+      <a href="tel:114" class="navbar-help">114 — Appel gratuit</a>
+      <button class="hamburger" id="hamburger" aria-label="Ouvrir le menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="overlay" id="overlay"></div>
+
+  <section class="hero" id="accueil">
+    <div class="hero-overlay"></div>
+    <div class="hero-figure-wrap">
+      <img
+        src="images/image-femme.jpeg"
+        alt="Femme africaine souffrante, mains couvrant le visage"
+        class="hero-figure-img"
+        loading="eager"
+      />
+    </div>
+    <div class="hero-content">
+      <div class="hero-badge">Plateforme 100% Anonyme &amp; Sécurisée</div>
+      <h1 class="hero-title">
+        Briser le silence<br/>
+        <em>en toute sécurité</em>
+      </h1>
+      <p class="hero-desc">
+        Cette plateforme permet de partager anonymement des témoignages
+        sur les violences basées sur le genre.<br/>
+        <strong>Aucun nom, aucune trace.</strong> Juste votre choix.
+      </p>
+      <div class="hero-actions">
+        <a href="#exprimer"   class="btn btn-primary">Partager mon témoignage</a>
+        <a href="#comprendre" class="btn btn-ghost">Comprendre les VBG →</a>
+      </div>
+      <!-- <div class="hero-stats">
+        <div class="stat">
+          <span class="stat-num">114</span>
+          <span class="stat-label">Appel d'urgence gratuit</span>
+        </div>
+        <div class="stat-sep"></div>
+        <div class="stat">
+          <span class="stat-num">24h</span>
+          <span class="stat-label">Prise en charge rapide</span>
+        </div>
+        <div class="stat-sep"></div>
+        <div class="stat">
+          <span class="stat-num">100%</span>
+          <span class="stat-label">Anonymat garanti</span>
+        </div>
+      </div>
+    </div> -->
+    <a href="#comprendre" class="hero-scroll" aria-label="Défiler">
+      <div class="scroll-arrow"></div>
+    </a>
+  </section>
+
+  <section class="section section--white" id="comprendre">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Éducation &amp; Sensibilisation</span>
+        <h2 class="section-title">Comprendre les VBG</h2>
+        <p class="section-intro">
+          Les violences basées sur le genre regroupent l'ensemble des actes violents commis
+          contre une personne en raison de son sexe, de son identité ou de son expression de genre.
+          Elles peuvent prendre différentes formes, toutes graves et inacceptables.
+        </p>
+      </div>
+      <div class="vbg-grid">
+        <div class="vbg-card">
+          <div class="vbg-icon">🔸</div>
+          <h3 class="vbg-type">Violence physique</h3>
+          <p class="vbg-desc">Les coups, blessures, agressions corporelles et toute atteinte à l'intégrité physique. Elle entraîne des conséquences graves, tant physiques que psychologiques.</p>
+        </div>
+        <div class="vbg-card">
+          <div class="vbg-icon">🔸</div>
+          <h3 class="vbg-type">Violence sexuelle</h3>
+          <p class="vbg-desc">Les agressions sexuelles, le viol, les attouchements forcés et tout acte à caractère sexuel commis sans le consentement libre et éclairé de la personne concernée.</p>
+        </div>
+        <div class="vbg-card">
+          <div class="vbg-icon">🔸</div>
+          <h3 class="vbg-type">Violence psychologique</h3>
+          <p class="vbg-desc">Les menaces, humiliations, manipulations, intimidations ou toute forme de pression mentale visant à contrôler ou déstabiliser une personne.</p>
+        </div>
+        <div class="vbg-card">
+          <div class="vbg-icon">🔸</div>
+          <h3 class="vbg-type">Violence économique</h3>
+          <p class="vbg-desc">Le contrôle abusif de l'argent, la privation de ressources financières, ou l'interdiction de travailler dans le but de rendre une personne dépendante.</p>
+        </div>
+        <div class="vbg-card">
+          <div class="vbg-icon">🔸</div>
+          <h3 class="vbg-type">Violence verbale</h3>
+          <p class="vbg-desc">Les insultes, injures, propos dégradants, critiques constantes et toute parole visant à blesser, rabaisser ou intimider une personne.</p>
+        </div>
+        <div class="vbg-card">
+          <div class="vbg-icon">🔸</div>
+          <h3 class="vbg-type">Violence sociale</h3>
+          <p class="vbg-desc">L'isolement, l'interdiction de sortir, la restriction des contacts familiaux ou amicaux, et toute action visant à couper une personne de son environnement social.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--soft" id="exprimer">
+    <div class="container container--narrow">
+      <div class="section-header">
+        <span class="section-label">Témoignez</span>
+        <h2 class="section-title">Exprimez-vous</h2>
+        <p class="section-intro">
+          Votre parole compte. Partagez votre vécu en toute confidentialité.
+          Vous pouvez joindre des preuves (photos, audio, vidéo) si vous le souhaitez.
+        </p>
+      </div>
+      <div class="form-card">
+        <div class="anon-note">
+           Votre message est envoyé de façon totalement anonyme. Aucune donnée permettant de vous identifier n'est collectée.
+        </div>
+        <form id="temoignage-form" novalidate>
+          <label class="form-label" for="msg">Exprimez-vous et envoyez vos preuves si possible</label>
+          <textarea class="form-textarea" id="msg" name="message" maxlength="5000" placeholder="Décrivez votre expérience en toute liberté… Votre voix mérite d'être entendue." required></textarea>
+          <div class="char-count" id="char-count">0 / 5000 caractères</div>
+          <div class="form-attachments">
+            <label class="attach-btn">
+              📷 Photo
+              <input type="file" class="file-input" id="photo-input" accept="image/*" multiple/>
+            </label>
+            <label class="attach-btn">
+              🎵 Audio
+              <input type="file" class="file-input" id="audio-input" accept="audio/*" multiple/>
+            </label>
+            <label class="attach-btn">
+              🎬 Vidéo
+              <input type="file" class="file-input" id="video-input" accept="video/*" multiple/>
+            </label>
+          </div>
+          <div class="preview-area" id="preview-area"></div>
+          <button type="submit" class="submit-btn" id="submit-btn">
+            <span id="btn-text">Envoyer mon témoignage </span>
+            <span id="btn-loader" hidden> Envoi en cours…</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--dark" id="contact">
+    <div class="container">
+      <div class="urgent-badge"> Besoin d'aide immédiate ?</div>
+      <div class="section-header">
+        <span class="section-label">Ressources d'aide</span>
+        <h2 class="section-title">Contactez-nous</h2>
+        <p class="section-intro">
+          Si vous êtes en danger ou vous avez besoin d'un soutien immédiat,
+          n'hésitez pas à nous contacter directement.
+        </p>
+      </div>
+      <div class="contact-grid">
+        <div class="contact-card contact-card--highlight">
+          <div class="contact-icon">📞</div>
+          <div class="contact-type">Appel d'urgence GRATUIT</div>
+          <div class="contact-info">
+            <a href="tel:114" class="contact-big">114</a><br/>
+            Disponible 24h/24 — 7j/7
+          </div>
+        </div>
+        <div class="contact-card">
+          <div class="contact-icon">📱</div>
+          <div class="contact-type">WhatsApp / Ligne d'alerte</div>
+          <div class="contact-info">
+            <a href="https://wa.me/2290151078888">(+229) 01 51 07 88 88</a><br/>
+            Signaler un cas ou demander de l'aide
+          </div>
+        </div>
+        <div class="contact-card">
+          <div class="contact-icon">📞</div>
+          <div class="contact-type">Contact principal INF</div>
+          <div class="contact-info">
+            <a href="tel:+22920212415">(+229) 20 21 24 15</a><br/>
+            Lun–Ven · 8h–12h30 / 14h–17h30
+          </div>
+        </div>
+        <div class="contact-card">
+          <div class="contact-icon">📧</div>
+          <div class="contact-type">Email officiel</div>
+          <div class="contact-info">
+            <a href="mailto:inf.contact@presidence.bj">inf.contact@presidence.bj</a><br/>
+            Adresse officielle de l'INF
+          </div>
+        </div>
+        <div class="contact-card">
+          <div class="contact-icon">📍</div>
+          <div class="contact-type">Adresse physique</div>
+          <div class="contact-info">
+            Avenue Jean-Paul II,<br/>
+            en face de la SONEB, Cotonou
+          </div>
+        </div>
+        <div class="contact-card">
+          <div class="contact-icon">🌐</div>
+          <div class="contact-type">Site officiel INF</div>
+          <div class="contact-info">
+            <a href="https://www.inf.bj/" target="_blank" rel="noopener noreferrer">www.inf.bj</a><br/>
+            Informations, services &amp; ressources
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-col">
+          <div class="footer-logo">VBG</div>
+          <p class="footer-about">
+            Plateforme de témoignage anonyme sur les violences basées sur le genre,
+            en partenariat avec l'Institut National de la Femme du Bénin.
+          </p>
+        </div>
+        <div class="footer-col">
+          <div class="footer-heading">Navigation</div>
+          <nav class="footer-nav">
+            <a href="#accueil">Accueil</a>
+            <a href="#comprendre">Comprendre les VBG</a>
+            <a href="#exprimer">Témoigner</a>
+            <a href="#contact">Contact</a>
+          </nav>
+        </div>
+        <div class="footer-col">
+          <div class="footer-heading">Urgence</div>
+          <div class="footer-emergency">
+            <a href="tel:114">📞 114</a> — Appel gratuit<br/>
+            <a href="https://wa.me/2290151078888">📱 WhatsApp INF</a><br/>
+            <a href="https://www.inf.bj/" target="_blank" rel="noopener">🌐 www.inf.bj</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>© 2025 — Plateforme VBG · Tous droits réservés · Bâtissons un monde sans violence.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/script.js"></script>
+</body>
+</html>
