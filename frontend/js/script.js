@@ -133,7 +133,7 @@ if (form) {
       formData.append('message', message);
       attachedFiles.forEach(file => formData.append('fichiers', file));
 
-      const response = await fetch('/api/temoignage', {
+      const response = await fetch('https://vbg-w3sv.onrender.com/api/temoignage', {
         method: 'POST',
         body: formData
       });
